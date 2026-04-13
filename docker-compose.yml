@@ -1,0 +1,19 @@
+# Local MongoDB. Production: MongoDB Atlas or a managed replica set.
+#   docker compose up -d
+# Then: cd server — set DATABASE_URL in .env — npx prisma db push
+
+services:
+  mongo:
+    image: mongo:7
+    ports:
+      - '27017:27017'
+    volumes:
+      - chakrebd_mongo:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--eval', "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  chakrebd_mongo:

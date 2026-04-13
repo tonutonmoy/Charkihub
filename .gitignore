@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Next.js (chakrebd)
+chakrebd/.next/
+chakrebd/out/
+chakrebd/.turbo/
+chakrebd/.vercel/
+
+# API / Node (server)
+server/dist/
+server/build/
+
+# Runtime data & uploads (API)
+server/data/
+server/uploads/
+
+# Env & secrets (keep examples)
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Logs & debug
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE / editor
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+*.swo
+*~
+
+# Test / coverage
+coverage/
+.nyc_output/
+*.tsbuildinfo
+
+# Prisma (optional local artifacts; client lives under node_modules)
+server/prisma/*.db
+server/prisma/*.db-journal
+
+# Misc
+*.local
+.cache/

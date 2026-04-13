@@ -1,0 +1,504 @@
+// MongoDB — CV drafts, jobs, blog, suggestions; use Atlas / replica set in production.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  email        String   @unique
+  passwordHash String
+  name         String
+  /// superadmin | admin | user
+  role         String   @default("user")
+  /// ISO 3166-1 alpha-2 (e.g. BD, IN, US)
+  countryCode  String   @default("BD")
+  /// City / district / area for local job matching
+  localArea    String?
+  /// Job interest tags (e.g. BCS, Bank, government) — matched against Job.subCategory
+  interests    String[] @default([])
+  /// UI language (e.g. en, bn)
+  locale       String   @default("en")
+  /// CV layout preference: international | regional
+  cvFormat     String?  @default("international")
+  /// For role=admin: { manageJobs, manageBlog, manageSuggestions } booleans
+  permissions  Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cvDrafts      CvDraft[]
+  jobLikes      JobLike[]
+  favorites     Favorite[]
+  comments      Comment[]
+  notifications Notification[]
+
+  feedPosts         FeedPost[]
+  contentReactions  ContentReaction[]
+  followsAsFollower Follow[]             @relation("FollowFollower")
+  followsAsTarget   Follow[]             @relation("FollowFollowing")
+  conversationsLow  Conversation[]       @relation("ConvLow")
+  conversationsHigh Conversation[]       @relation("ConvHigh")
+  messagesSent      Message[]
+  connFrom          ConnectionRequest[]  @relation("ConnFrom")
+  connTo            ConnectionRequest[]  @relation("ConnTo")
+  groupsCreated     Group[]
+  groupMembers      GroupMember[]
+  groupMessages     GroupMessage[]
+  groupJoinRequests GroupJoinRequest[]
+  blockedFromGroups GroupBlockedUser[] @relation("GroupBlockedMember")
+
+  @@map("users")
+}
+
+model CvDraft {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String   @db.ObjectId
+  templateId String
+  data       Json
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, templateId])
+  @@index([userId])
+  @@map("cv_drafts")
+}
+
+/// government | private | local
+model Job {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  mainCategory String
+  /// BCS, Bank, School, etc.
+  subCategory  String
+  countryCode  String
+  /// Required when mainCategory = local — matches User.localArea loosely
+  localArea    String?
+
+  title        String
+  summary      String
+  description  String?
+  organization String
+
+  applyUrl String?
+  phone    String?
+
+  startAt DateTime
+  endAt   DateTime
+
+  pdfUrl String?
+
+  /// Admin can show an alert callout (off by default)
+  alertEnabled Boolean @default(false)
+  alertMessage String?
+
+  /// draft | published
+  status String @default("draft")
+
+  likeCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  likes JobLike[]
+
+  @@index([countryCode, mainCategory])
+  @@index([countryCode, status])
+  @@index([status])
+  @@map("jobs")
+}
+
+/// Managed job search filters (superadmin CRUD). kind: country | city | main_category | sub_category
+model JobFilterOption {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  kind         String
+  countryCode  String   @default("")
+  mainCategory String   @default("")
+  value        String
+  label        String
+  sortOrder    Int      @default(0)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([kind, countryCode, mainCategory, value])
+  @@index([kind, countryCode])
+  @@index([kind, countryCode, mainCategory])
+  @@index([active])
+  @@map("job_filter_options")
+}
+
+model JobLike {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @db.ObjectId
+  jobId  String @db.ObjectId
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job  Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, jobId])
+  @@index([jobId])
+  @@map("job_likes")
+}
+
+/// job | blog | suggestion
+model Favorite {
+  id         String @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String @db.ObjectId
+  targetType String
+  targetId   String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, targetType, targetId])
+  @@index([userId])
+  @@map("favorites")
+}
+
+model BlogPost {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  title    String
+  slug     String?
+  excerpt  String
+  /// Markdown body
+  content  String
+  countryCode String
+  category String
+
+  published Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([countryCode, category])
+  @@index([published])
+  @@map("blog_posts")
+}
+
+model Suggestion {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  title       String
+  summary     String
+  /// HSC, SSC, BCS, government job, bank job, MCQ, etc.
+  category    String
+  countryCode String
+  content     String?
+  externalUrl String?
+
+  sortOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([countryCode, category])
+  @@map("suggestions")
+}
+
+/// Target: blog | job | feed (feed = FeedPost id)
+model Comment {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  userId String @db.ObjectId
+  targetType String
+  targetId   String
+  body       String
+
+  parentId String? @db.ObjectId
+  parent   Comment?  @relation("CommentThread", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  replies  Comment[] @relation("CommentThread")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([targetType, targetId])
+  @@index([userId])
+  @@index([parentId])
+  @@map("comments")
+}
+
+/// Emoji reactions on comments, feed posts, or jobs (targetType: comment | feed_post | job)
+model ContentReaction {
+  id         String @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String @db.ObjectId
+  targetType String
+  targetId   String
+  emoji      String @default("👍")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, targetType, targetId])
+  @@index([targetType, targetId])
+  @@map("content_reactions")
+}
+
+model FeedPost {
+  id        String @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String @db.ObjectId
+  groupId   String? @db.ObjectId
+  /// Plain-text fallback / search snippet
+  body      String   @default("")
+  /// Sanitized HTML from rich editor (optional)
+  bodyHtml  String?
+  viewCount Int    @default(0)
+  shareCount Int   @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group? @relation(fields: [groupId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  images FeedPostImage[]
+
+  @@index([userId, createdAt])
+  @@index([groupId, createdAt])
+  @@map("feed_posts")
+}
+
+model FeedPostImage {
+  id        String @id @default(auto()) @map("_id") @db.ObjectId
+  postId    String @db.ObjectId
+  url       String
+  sortOrder Int    @default(0)
+
+  post FeedPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@map("feed_post_images")
+}
+
+model Follow {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  followerId  String @db.ObjectId
+  followingId String @db.ObjectId
+
+  follower  User @relation("FollowFollower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("FollowFollowing", fields: [followingId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([followerId, followingId])
+  @@index([followingId])
+  @@map("follows")
+}
+
+/// LinkedIn-style connection (pending | accepted | rejected)
+model ConnectionRequest {
+  id         String @id @default(auto()) @map("_id") @db.ObjectId
+  fromUserId String @db.ObjectId
+  toUserId   String @db.ObjectId
+  status     String @default("pending")
+
+  fromUser User @relation("ConnFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser   User @relation("ConnTo", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([fromUserId, toUserId])
+  @@index([toUserId, status])
+  @@map("connection_requests")
+}
+
+model Conversation {
+  id         String @id @default(auto()) @map("_id") @db.ObjectId
+  userLowId  String @db.ObjectId
+  userHighId String @db.ObjectId
+
+  userLow  User @relation("ConvLow", fields: [userLowId], references: [id], onDelete: Cascade)
+  userHigh User @relation("ConvHigh", fields: [userHighId], references: [id], onDelete: Cascade)
+
+  messages Message[]
+
+  @@unique([userLowId, userHighId])
+  @@map("conversations")
+}
+
+model Message {
+  id             String @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String @db.ObjectId
+  senderId       String @db.ObjectId
+  body           String
+  read           Boolean @default(false)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+model Group {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  description String?
+  coverUrl    String?
+  isPublic    Boolean  @default(true)
+  createdById String   @db.ObjectId
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy User @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  members      GroupMember[]
+  posts        FeedPost[]
+  messages     GroupMessage[]
+  joinRequests GroupJoinRequest[]
+  blockedUsers GroupBlockedUser[]
+
+  @@map("groups")
+}
+
+/// Facebook-style join request for private groups (pending | approved | rejected)
+model GroupJoinRequest {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  groupId   String   @db.ObjectId
+  userId    String   @db.ObjectId
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([groupId, status])
+  @@map("group_join_requests")
+}
+
+/// Users blocked from rejoining a group (admin action)
+model GroupBlockedUser {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  groupId   String   @db.ObjectId
+  userId    String   @db.ObjectId
+  createdAt DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation("GroupBlockedMember", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@map("group_blocked_users")
+}
+
+model GroupMessage {
+  id      String @id @default(auto()) @map("_id") @db.ObjectId
+  groupId String @db.ObjectId
+  userId  String @db.ObjectId
+  body    String
+
+  createdAt DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([groupId, createdAt])
+  @@map("group_messages")
+}
+
+model GroupMember {
+  id      String @id @default(auto()) @map("_id") @db.ObjectId
+  groupId String @db.ObjectId
+  userId  String @db.ObjectId
+  /// admin | member
+  role    String @default("member")
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  joinedAt DateTime @default(now())
+
+  @@unique([groupId, userId])
+  @@index([userId])
+  @@map("group_members")
+}
+
+/// Exam prep categories & courses (admin-managed)
+model ExamPrepCategory {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  label       String
+  slug        String
+  countryCode String @default("BD")
+  sortOrder   Int    @default(0)
+  active      Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  courses ExamPrepCourse[]
+
+  @@unique([slug, countryCode])
+  @@index([countryCode, active])
+  @@map("exam_prep_categories")
+}
+
+model ExamPrepCourse {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  categoryId  String @db.ObjectId
+  title       String
+  description String?
+  lessons     Int     @default(0)
+  duration    String  @default("")
+  rating      Float   @default(0)
+  price       String  @default("Free")
+  sortOrder   Int     @default(0)
+  published   Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  category ExamPrepCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([categoryId, published])
+  @@map("exam_prep_courses")
+}
+
+/// Admin-managed question bank entries (previous papers, etc.)
+model QuestionBankItem {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  title       String
+  category    String
+  year        String
+  solved      Boolean  @default(true)
+  description String?
+  pdfUrl      String?
+  countryCode String   @default("BD")
+  sortOrder   Int      @default(0)
+  published   Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([countryCode, category])
+  @@index([published])
+  @@map("question_bank_items")
+}
+
+model Notification {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @db.ObjectId
+  title  String
+  body   String
+  read   Boolean @default(false)
+  /// optional payload
+  meta   Json?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+  @@map("notifications")
+}

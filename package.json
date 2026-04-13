@@ -1,0 +1,16 @@
+{
+  "name": "chakrebd",
+  "private": true,
+  "description": "Run API (4000) + Next.js (3000) together for local dev",
+  "scripts": {
+    "dev": "npx concurrently -n api,web -c cyan,magenta \"npm run dev --prefix server\" \"npm run dev --prefix chakrebd\"",
+    "dev:api": "npm run dev --prefix server",
+    "dev:web": "npm run dev --prefix chakrebd",
+    "start": "npm run start:all",
+    "start:all": "npx concurrently -n api,web -c cyan,magenta \"npm run dev --prefix server\" \"npm run start:next --prefix chakrebd\"",
+    "start:prod": "npx concurrently -n api,web -c cyan,magenta \"npm run start --prefix server\" \"npm run start:next --prefix chakrebd\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
