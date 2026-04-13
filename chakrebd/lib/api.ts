@@ -1555,3 +1555,4 @@ export async function adminDeleteSuggestion(id: string): Promise<{ ok: true } | 
   if (!r.ok) return { ok: false, error: r.error };
   return { ok: true };
 }
+

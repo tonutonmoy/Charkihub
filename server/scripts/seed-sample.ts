@@ -565,7 +565,7 @@ async function main() {
   } else {
     console.log('[seed] feed already exists — skip');
   }
-}
+  }
 
 main()
   .catch((e) => {
