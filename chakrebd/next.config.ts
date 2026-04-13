@@ -4,6 +4,8 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+const r2ImageHost = process.env.NEXT_PUBLIC_R2_IMAGE_HOST?.trim();
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   /** Parent repo has its own package-lock — pin tracing to this app folder. */
@@ -16,8 +18,11 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'picsum.photos', pathname: '/**' },
-      // ImageBB hosted CV photos (next/image when used)
+      // Legacy CV photos; new uploads use R2 (set NEXT_PUBLIC_R2_IMAGE_HOST to your *.r2.dev or CDN host)
       { protocol: 'https', hostname: 'i.ibb.co', pathname: '/**' },
+      ...(r2ImageHost
+        ? [{ protocol: 'https' as const, hostname: r2ImageHost, pathname: '/**' as const }]
+        : []),
     ],
   },
 };

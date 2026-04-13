@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { uploadBase64ToImgbb } from '../services/imgbb.js';
+import { uploadBase64ImageToR2 } from '../services/r2Upload.js';
 import { publicFileUrl, saveUploadedFile } from './files.js';
 
 const P = '/api/v1';
@@ -18,7 +18,7 @@ export function registerUploadRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: 'image (base64 or data URL) is required' });
       }
       try {
-        const url = await uploadBase64ToImgbb(image);
+        const url = await uploadBase64ImageToR2(image);
         return { url };
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'upload failed';
@@ -27,7 +27,7 @@ export function registerUploadRoutes(app: FastifyInstance) {
     }
   );
 
-  /** PDF or binary file: base64 (data URL ok). Stored on server; URL returned (ImgBB is image-only). */
+  /** PDF or binary file: base64 (data URL ok). Stored on server disk; URL returned. */
   app.post<{
     Body: { file?: string; filename?: string };
   }>(`${P}/upload/file`, { preHandler: [app.authenticate] }, async (req, reply) => {
