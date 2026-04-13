@@ -146,7 +146,7 @@ const Navbar = () => {
         <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           <DropdownMenu>
             <DropdownMenuTrigger
-              className="hidden md:flex items-center gap-1.5 max-w-[140px] h-9 px-2 rounded-full border border-border/60 bg-muted/40 hover:bg-muted text-xs font-bold"
+              className="hidden md:flex items-center gap-1.5 max-w-35 h-9 px-2 rounded-full border border-border/60 bg-muted/40 hover:bg-muted text-xs font-bold"
               title={t('nav.country')}
             >
               <span className="truncate">{countryCode}</span>
@@ -200,7 +200,7 @@ const Navbar = () => {
             >
               <Bell className="h-5 w-5" />
               {unreadNotif > 0 ? (
-                <span className="absolute top-1.5 right-1.5 min-w-[8px] h-2 w-2 rounded-full bg-primary ring-2 ring-background" />
+                <span className="absolute top-1.5 right-1.5 min-w-2 h-2 w-2 rounded-full bg-primary ring-2 ring-background" />
               ) : null}
             </Button>
           ) : null}
@@ -208,7 +208,7 @@ const Navbar = () => {
           <div className="hidden sm:flex items-center gap-1">
             {isLoggedIn ? (
               <DropdownMenu>
-                <DropdownMenuTrigger className="flex items-center gap-2 pl-2 pr-1 h-9 rounded-full hover:bg-muted transition-colors max-w-[160px]">
+                <DropdownMenuTrigger className="flex items-center gap-2 pl-2 pr-1 h-9 rounded-full hover:bg-muted transition-colors max-w-40">
                   <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                     <User className="w-4 h-4 text-primary" />
                   </div>
