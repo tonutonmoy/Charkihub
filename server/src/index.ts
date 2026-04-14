@@ -29,7 +29,7 @@ import { registerQuestionBankRoutes } from './routes/questionBank.js';
 
 const PORT = Number(process.env.PORT) || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-only-change-in-production';
-const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:3000';
+const CORS_ORIGIN = process.env.CORS_ORIGIN;
 const TRUST_PROXY = process.env.TRUST_PROXY === '1' || process.env.NODE_ENV === 'production';
 
 if (!process.env.DATABASE_URL) {
@@ -46,7 +46,7 @@ const app = Fastify({
 });
 
 await app.register(cors, {
-  origin: CORS_ORIGIN.split(',').map((s) => s.trim()),
+  origin: CORS_ORIGIN,
   credentials: true,
 });
 
