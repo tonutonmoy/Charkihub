@@ -10,9 +10,8 @@ import {
   MapPin,
   Building2,
   Facebook,
-  Twitter,
   Linkedin,
-  Link as LinkIcon,
+  LinkIcon,
   Heart,
   Star,
   AlertTriangle,
@@ -37,6 +36,8 @@ import {
 import { toast } from 'sonner';
 import { useAuth } from '../components/AuthContext';
 import { CommentThread } from '../components/CommentThread';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faWhatsapp } from '@fortawesome/free-brands-svg-icons';
 
 const JobDetails = () => {
   const params = useParams();
@@ -72,12 +73,14 @@ const JobDetails = () => {
     if (!job) return;
     const url = typeof window !== 'undefined' ? window.location.href : '';
     const text = `Job: ${job.title} — ${job.organization}`;
+    
     if (platform === 'facebook') {
       window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank');
-    } else if (platform === 'twitter') {
-      window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`, '_blank');
     } else if (platform === 'linkedin') {
       window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`, '_blank');
+    } else if (platform === 'whatsapp') {
+      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(`${text}\n${url}`)}`;
+      window.open(whatsappUrl, '_blank');
     } else {
       void navigator.clipboard.writeText(url);
       toast.success('Link copied');
@@ -310,10 +313,10 @@ const JobDetails = () => {
                       <Button
                         variant="outline"
                         className="rounded-xl h-12"
-                        onClick={() => handleShare('twitter')}
+                        onClick={() => handleShare('whatsapp')}
                         type="button"
                       >
-                        <Twitter className="w-5 h-5" />
+                        <FontAwesomeIcon className="w-5 h-5" icon={faWhatsapp} />
                       </Button>
                       <Button
                         variant="outline"

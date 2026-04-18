@@ -32,6 +32,12 @@ const Navbar = () => {
   const [unreadNotif, setUnreadNotif] = useState(0);
   const prevUnreadRef = useRef<number | null>(null);
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false); // Sheet state যোগ করা হলো
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -39,6 +45,7 @@ const Navbar = () => {
       setUnreadNotif(0);
       return;
     }
+    
     const poll = async () => {
       const r = await listNotifications(true);
       if (!r.ok) return;
@@ -64,6 +71,17 @@ const Navbar = () => {
     const base = `/jobs?country=${countryCode}`;
     if (!main) return base;
     return `${base}&mainCategory=${main}`;
+  };
+
+  // শীট বন্ধ করার ফাংশন
+  const closeSheet = () => {
+    setSheetOpen(false);
+  };
+
+  // নেভিগেশনের জন্য হ্যান্ডলার
+  const handleNavigation = (href: string) => {
+    router.push(href);
+    closeSheet();
   };
 
   const mainLinks = [
@@ -242,63 +260,198 @@ const Navbar = () => {
             )}
           </div>
 
-          <Sheet>
-            <SheetTrigger className="xl:hidden flex items-center justify-center w-9 h-9 rounded-full hover:bg-muted transition-colors">
+          {/* Mobile Sheet Menu - Auto Close on Navigation */}
+          <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+            <SheetTrigger 
+              className="xl:hidden flex  items-center justify-center w-9 h-9 rounded-full hover:bg-muted transition-colors"
+              suppressHydrationWarning
+            >
               <Menu className="h-6 w-6" />
             </SheetTrigger>
-            <SheetContent side="right" className="w-[min(100vw,380px)] overflow-y-auto">
+            <SheetContent side="right" className="w-[min(100vw,380px)] overflow-y-auto p-3">
               <div className="flex flex-col gap-2 mt-8">
                 <p className="text-xs font-bold text-muted-foreground px-2">{countryName}</p>
-                <Link href="/" className="text-lg font-semibold py-2 hover:text-primary">
+                
+                {/* Home Link */}
+                <button
+                  onClick={() => handleNavigation('/')}
+                  className="text-left text-lg font-semibold py-2 hover:text-primary transition-colors"
+                >
                   {t('nav.home')}
-                </Link>
+                </button>
+                
                 <p className="text-xs font-bold text-muted-foreground px-2 pt-2">{t('nav.jobsMenu')}</p>
-                <Link href={jobHref('government')} className="pl-4 py-1.5 font-medium hover:text-primary">
+                
+                {/* Job Links */}
+                <button
+                  onClick={() => handleNavigation(jobHref('government'))}
+                  className="text-left pl-4 py-1.5 font-medium hover:text-primary transition-colors"
+                >
                   {t('nav.jobsGov')}
-                </Link>
-                <Link href={jobHref('private')} className="pl-4 py-1.5 font-medium hover:text-primary">
+                </button>
+                
+                <button
+                  onClick={() => handleNavigation(jobHref('private'))}
+                  className="text-left pl-4 py-1.5 font-medium hover:text-primary transition-colors"
+                >
                   {t('nav.jobsPrivate')}
-                </Link>
-                <Link href={jobHref('local')} className="pl-4 py-1.5 font-medium hover:text-primary">
+                </button>
+                
+                <button
+                  onClick={() => handleNavigation(jobHref('local'))}
+                  className="text-left pl-4 py-1.5 font-medium hover:text-primary transition-colors"
+                >
                   {t('nav.jobsLocal')}
-                </Link>
-                <Link href={jobHref()} className="pl-4 py-1.5 font-medium hover:text-primary">
+                </button>
+                
+                <button
+                  onClick={() => handleNavigation(jobHref())}
+                  className="text-left pl-4 py-1.5 font-medium hover:text-primary transition-colors"
+                >
                   {t('nav.jobsAll')}
-                </Link>
+                </button>
+                
+                {/* Other Main Links */}
                 {mainLinks.slice(1).map((link) => (
-                  <Link key={link.href} href={link.href} className="text-lg font-semibold py-2 hover:text-primary">
+                  <button
+                    key={link.href}
+                    onClick={() => handleNavigation(link.href)}
+                    className="text-left pl-3 text-lg font-semibold py-2 hover:text-primary transition-colors"
+                  >
                     {link.name}
-                  </Link>
+                  </button>
                 ))}
+                
+                {/* Country Selection */}
                 <div className="border-t border-border my-4 pt-4">
                   <p className="text-xs font-bold text-muted-foreground mb-2">{t('nav.country')}</p>
                   <select
                     value={countryCode}
-                    onChange={(e) => setCountryCode(e.target.value)}
+                    onChange={(e) => {
+                      setCountryCode(e.target.value);
+                      // Country change এ শীট বন্ধ করা হবে না
+                    }}
                     className="w-full rounded-xl border border-border bg-background p-3 text-sm font-medium"
                   >
                     {COUNTRY_OPTIONS.map(({ code, name }) => (
                       <option key={code} value={code}>
-                        {name}
+                        {name} ({code})
                       </option>
                     ))}
                   </select>
                 </div>
+
+                {/* Language Selection */}
+                <div className="border-t border-border my-4 pt-4">
+                  <p className="text-xs font-bold text-muted-foreground mb-2">Language</p>
+                  <select
+                    value={locale}
+                    onChange={(e) => {
+                      setLanguage(e.target.value);
+                      // Language change এ শীট বন্ধ করা হবে না
+                    }}
+                    className="w-full rounded-xl border border-border bg-background p-3 text-sm font-medium"
+                  >
+                    {SUPPORTED_LOCALES.map(({ code, label }) => (
+                      <option key={code} value={code}>
+                        {label} ({code.toUpperCase()})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Theme Toggle */}
+                <div className="border-t border-border my-4 pt-4">
+                  <Button 
+                    variant="outline" 
+                    className="w-full rounded-xl justify-start" 
+                    onClick={() => {
+                      toggleTheme();
+                      // Theme toggle এ শীট বন্ধ করা হবে না
+                    }}
+                  >
+                    {theme === 'light' ? (
+                      <>🌙 Dark Mode</>
+                    ) : (
+                      <>☀️ Light Mode</>
+                    )}
+                  </Button>
+                </div>
+                
+                {/* Auth Related Buttons */}
                 {isLoggedIn ? (
-                  <>
-                    <Button variant="outline" className="w-full rounded-xl mt-2" onClick={() => router.push('/dashboard')}>
+                  <div className="flex flex-col gap-2">
+                    <Button 
+                      variant="outline" 
+                      className="w-full rounded-xl justify-start" 
+                      onClick={() => handleNavigation('/dashboard')}
+                    >
                       Dashboard
                     </Button>
-                    <Button variant="outline" className="w-full rounded-xl" onClick={() => router.push('/dashboard/notifications')}>
-                      {t('nav.notifications')}
+                    
+                    <Button 
+                      variant="outline" 
+                      className="w-full rounded-xl justify-start" 
+                      onClick={() => handleNavigation('/dashboard/favorites')}
+                    >
+                      Favorites
                     </Button>
-                  </>
+                    
+                    <Button 
+                      variant="outline" 
+                      className="w-full rounded-xl justify-start" 
+                      onClick={() => handleNavigation('/dashboard/profile')}
+                    >
+                      Profile
+                    </Button>
+                    
+                    <Button 
+                      variant="outline" 
+                      className="w-full rounded-xl justify-start" 
+                      onClick={() => handleNavigation('/dashboard/notifications')}
+                    >
+                      {t('nav.notifications')}
+                      {unreadNotif > 0 && (
+                        <span className="ml-2 bg-primary text-primary-foreground text-xs rounded-full px-2 py-0.5">
+                          {unreadNotif}
+                        </span>
+                      )}
+                    </Button>
+                    
+                    {(user?.role === 'admin' || user?.role === 'superadmin') && (
+                      <Button 
+                        variant="outline" 
+                        className="w-full rounded-xl justify-start" 
+                        onClick={() => handleNavigation('/admin')}
+                      >
+                        Admin Panel
+                      </Button>
+                    )}
+                    
+                    <Button 
+                      variant="destructive" 
+                      className="w-full rounded-xl" 
+                      onClick={() => {
+                        logout();
+                        closeSheet();
+                      }}
+                    >
+                      Logout
+                    </Button>
+                  </div>
                 ) : (
                   <div className="flex flex-col gap-2 mt-4">
-                    <Button variant="outline" className="w-full rounded-xl" onClick={() => router.push('/login')}>
+                    <Button 
+                      variant="outline" 
+                      className="w-full rounded-xl" 
+                      onClick={() => handleNavigation('/login')}
+                    >
                       {t('nav.login')}
                     </Button>
-                    <Button className="w-full rounded-xl" onClick={() => router.push('/signup')}>
+                    <Button 
+                      className="w-full rounded-xl" 
+                      onClick={() => handleNavigation('/signup')}
+                    >
                       {t('nav.signup')}
                     </Button>
                   </div>
@@ -313,4 +466,3 @@ const Navbar = () => {
 };
 
 export default Navbar;
-// dd

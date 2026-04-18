@@ -279,7 +279,7 @@ const AdminJobs = () => {
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-[min(100vw-2rem,56rem)] w-full max-h-[90vh] overflow-y-auto rounded-2xl">
+        <DialogContent className=" max-h-[90vh] overflow-y-auto rounded-2xl">
           <DialogHeader>
             <DialogTitle>{editingId ? 'Edit job' : 'New job'}</DialogTitle>
           </DialogHeader>
@@ -400,7 +400,7 @@ const AdminJobs = () => {
               <input
                 type="file"
                 accept="application/pdf"
-                className="mt-2 block w-full text-xs"
+                className="mt-2 block  text-xs border text-white bg-gray-700 rounded-xl p-2 w-[50%]"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (!f) return;
