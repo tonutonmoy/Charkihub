@@ -38,8 +38,8 @@ const TRUST_PROXY =
 
 // ✅ whitelist your domains
 const allowedOrigins = [
-  'https://chakrihubbd.netlify.app',
-  'https://www.chakrihubbd.netlify.app',
+ "https://charkihub.vercel.app",
+ "https://www.charkihub.vercel.app"
 
 ];
 
