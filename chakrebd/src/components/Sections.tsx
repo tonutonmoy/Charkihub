@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useLanguage } from './LanguageContext';
 import { fetchPublicStats } from '@/lib/api';
+import Image from 'next/image';
 
 function formatStatNumber(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1).replace(/\.0$/, '')}M+`;
@@ -231,14 +232,15 @@ export const Footer = () => {
       <div className="container mx-auto px-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-16">
           <div className="space-y-6">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
-                <span className="text-white font-bold text-xl">C</span>
-              </div>
-              <span className="text-xl font-bold tracking-tight">
-                ChakriHub <span className="text-primary">BD</span>
-              </span>
-            </Link>
+                  <Link href='/' >
+   <Image
+      src="/image/logo.png"
+      alt="ChakriHub Logo"
+      width={200}
+      height={32}
+      className="object-contain"
+   />
+</Link>
             <p className="text-muted-foreground leading-relaxed">
               Job search and exam prep for a worldwide audience—<span className="font-medium text-foreground">main focus on Bangladesh</span> government and competitive careers.
             </p>
