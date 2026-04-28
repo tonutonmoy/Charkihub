@@ -277,8 +277,7 @@ const JobDetails = () => {
                     {job.pdfUrl ? (
                       <a
                         href={job.pdfUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                       download={`${job?.title||'job details'}.pdf`}
                         className={cn(
                           buttonVariants({ variant: 'outline', size: 'lg' }),
                           'w-full h-14 rounded-2xl font-black text-lg border-2 inline-flex items-center justify-center gap-2'

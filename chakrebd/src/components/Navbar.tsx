@@ -20,8 +20,9 @@ import { cn } from '@/lib/utils';
 import { useAuth } from './AuthContext';
 import { useLocation } from '@/lib/locationContext';
 import { COUNTRY_OPTIONS } from '@/lib/countries';
-import { listNotifications } from '@/lib/api';
+import { getToken, listNotifications } from '@/lib/api';
 import { playNotificationSound } from '@/src/lib/notificationSound';
+import Image from 'next/image';
 
 const Navbar = () => {
   const { locale, setLanguage, t } = useLanguage();
@@ -33,7 +34,22 @@ const Navbar = () => {
   const prevUnreadRef = useRef<number | null>(null);
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
-  const [sheetOpen, setSheetOpen] = useState(false); // Sheet state যোগ করা হলো
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  // -- Force country to 'BD' when not logged in --
+  useEffect(() => {
+    if (!getToken() && countryCode !== 'BD') {
+      setCountryCode('BD');
+    }
+  }, [countryCode, setCountryCode]);
+
+  // -- Helper to get country options based on login status --
+  const getCountryOptions = () => {
+    if (!getToken()) {
+      return [{ code: 'BD', name: 'Bangladesh' }];
+    }
+    return COUNTRY_OPTIONS;
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -45,7 +61,7 @@ const Navbar = () => {
       setUnreadNotif(0);
       return;
     }
-    
+
     const poll = async () => {
       const r = await listNotifications(true);
       if (!r.ok) return;
@@ -73,12 +89,10 @@ const Navbar = () => {
     return `${base}&mainCategory=${main}`;
   };
 
-  // শীট বন্ধ করার ফাংশন
   const closeSheet = () => {
     setSheetOpen(false);
   };
 
-  // নেভিগেশনের জন্য হ্যান্ডলার
   const handleNavigation = (href: string) => {
     router.push(href);
     closeSheet();
@@ -97,24 +111,22 @@ const Navbar = () => {
   return (
     <nav
       className={cn(
-        'fixed top-0 left-0 right-0 z-50 transition-all duration-300',
+        'fixed top-0 left-0 right-0 z-50 transition-all duration-300  ',
         isScrolled
           ? 'bg-background/85 backdrop-blur-md border-b border-border py-2.5 shadow-sm'
           : 'bg-transparent py-4'
       )}
     >
       <div className="container mx-auto px-4 flex items-center justify-between gap-4">
-        <Link href="/" className="flex items-center gap-2 shrink-0 min-w-0">
-          <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-lg shadow-primary/20 shrink-0">
-            <span className="text-white font-bold text-xl">C</span>
-          </div>
-          <div className="hidden sm:flex flex-col leading-tight min-w-0">
-            <span className="text-lg font-black tracking-tight truncate">{t('brand.name')}</span>
-            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider truncate">
-              {t('brand.tagline')}
-            </span>
-          </div>
-        </Link>
+         <Link href='/' >
+   <Image
+      src="/image/logo.png"
+      alt="ChakriHub Logo"
+      width={170}
+      height={32}
+      className="object-contain"
+   />
+</Link>
 
         <div className="hidden xl:flex items-center gap-1 flex-1 justify-center min-w-0">
           {mainLinks.slice(0, 1).map((link) => (
@@ -162,6 +174,7 @@ const Navbar = () => {
         </div>
 
         <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          {/* Desktop Country Dropdown – conditional options */}
           <DropdownMenu>
             <DropdownMenuTrigger
               className="hidden md:flex items-center gap-1.5 max-w-35 h-9 px-2 rounded-full border border-border/60 bg-muted/40 hover:bg-muted text-xs font-bold"
@@ -171,7 +184,7 @@ const Navbar = () => {
               <ChevronDown className="w-3 h-3 opacity-60 shrink-0" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="max-h-[min(70vh,360px)] overflow-y-auto rounded-xl w-52">
-              {COUNTRY_OPTIONS.map(({ code, name }) => (
+              {getCountryOptions().map(({ code, name }) => (
                 <DropdownMenuItem
                   key={code}
                   onClick={() => setCountryCode(code)}
@@ -183,6 +196,7 @@ const Navbar = () => {
             </DropdownMenuContent>
           </DropdownMenu>
 
+          {/* Language Dropdown (unchanged) */}
           <DropdownMenu>
             <DropdownMenuTrigger className="flex items-center justify-center w-9 h-9 rounded-full hover:bg-muted transition-colors">
               <Globe className="h-5 w-5" />
@@ -208,7 +222,7 @@ const Navbar = () => {
             {theme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
           </Button>
 
-          {isLoggedIn ? (
+          {isLoggedIn && (
             <Button
               variant="ghost"
               size="icon"
@@ -217,11 +231,11 @@ const Navbar = () => {
               title={t('nav.notifications')}
             >
               <Bell className="h-5 w-5" />
-              {unreadNotif > 0 ? (
+              {unreadNotif > 0 && (
                 <span className="absolute top-1.5 right-1.5 min-w-2 h-2 w-2 rounded-full bg-primary ring-2 ring-background" />
-              ) : null}
+              )}
             </Button>
-          ) : null}
+          )}
 
           <div className="hidden sm:flex items-center gap-1">
             {isLoggedIn ? (
@@ -260,10 +274,10 @@ const Navbar = () => {
             )}
           </div>
 
-          {/* Mobile Sheet Menu - Auto Close on Navigation */}
+          {/* Mobile Sheet – with conditional country select */}
           <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-            <SheetTrigger 
-              className="xl:hidden flex  items-center justify-center w-9 h-9 rounded-full hover:bg-muted transition-colors"
+            <SheetTrigger
+              className="xl:hidden flex items-center justify-center w-9 h-9 rounded-full hover:bg-muted transition-colors"
               suppressHydrationWarning
             >
               <Menu className="h-6 w-6" />
@@ -271,47 +285,41 @@ const Navbar = () => {
             <SheetContent side="right" className="w-[min(100vw,380px)] overflow-y-auto p-3">
               <div className="flex flex-col gap-2 mt-8">
                 <p className="text-xs font-bold text-muted-foreground px-2">{countryName}</p>
-                
-                {/* Home Link */}
+
                 <button
                   onClick={() => handleNavigation('/')}
                   className="text-left text-lg font-semibold py-2 hover:text-primary transition-colors"
                 >
                   {t('nav.home')}
                 </button>
-                
+
                 <p className="text-xs font-bold text-muted-foreground px-2 pt-2">{t('nav.jobsMenu')}</p>
-                
-                {/* Job Links */}
+
                 <button
                   onClick={() => handleNavigation(jobHref('government'))}
                   className="text-left pl-4 py-1.5 font-medium hover:text-primary transition-colors"
                 >
                   {t('nav.jobsGov')}
                 </button>
-                
                 <button
                   onClick={() => handleNavigation(jobHref('private'))}
                   className="text-left pl-4 py-1.5 font-medium hover:text-primary transition-colors"
                 >
                   {t('nav.jobsPrivate')}
                 </button>
-                
                 <button
                   onClick={() => handleNavigation(jobHref('local'))}
                   className="text-left pl-4 py-1.5 font-medium hover:text-primary transition-colors"
                 >
                   {t('nav.jobsLocal')}
                 </button>
-                
                 <button
                   onClick={() => handleNavigation(jobHref())}
                   className="text-left pl-4 py-1.5 font-medium hover:text-primary transition-colors"
                 >
                   {t('nav.jobsAll')}
                 </button>
-                
-                {/* Other Main Links */}
+
                 {mainLinks.slice(1).map((link) => (
                   <button
                     key={link.href}
@@ -321,19 +329,16 @@ const Navbar = () => {
                     {link.name}
                   </button>
                 ))}
-                
-                {/* Country Selection */}
+
+                {/* Mobile Country Select – conditional options */}
                 <div className="border-t border-border my-4 pt-4">
                   <p className="text-xs font-bold text-muted-foreground mb-2">{t('nav.country')}</p>
                   <select
                     value={countryCode}
-                    onChange={(e) => {
-                      setCountryCode(e.target.value);
-                      // Country change এ শীট বন্ধ করা হবে না
-                    }}
+                    onChange={(e) => setCountryCode(e.target.value)}
                     className="w-full rounded-xl border border-border bg-background p-3 text-sm font-medium"
                   >
-                    {COUNTRY_OPTIONS.map(({ code, name }) => (
+                    {getCountryOptions().map(({ code, name }) => (
                       <option key={code} value={code}>
                         {name} ({code})
                       </option>
@@ -341,15 +346,12 @@ const Navbar = () => {
                   </select>
                 </div>
 
-                {/* Language Selection */}
+                {/* Language selection (unchanged) */}
                 <div className="border-t border-border my-4 pt-4">
                   <p className="text-xs font-bold text-muted-foreground mb-2">Language</p>
                   <select
                     value={locale}
-                    onChange={(e) => {
-                      setLanguage(e.target.value);
-                      // Language change এ শীট বন্ধ করা হবে না
-                    }}
+                    onChange={(e) => setLanguage(e.target.value)}
                     className="w-full rounded-xl border border-border bg-background p-3 text-sm font-medium"
                   >
                     {SUPPORTED_LOCALES.map(({ code, label }) => (
@@ -360,56 +362,30 @@ const Navbar = () => {
                   </select>
                 </div>
 
-                {/* Theme Toggle */}
+                {/* Theme toggle */}
                 <div className="border-t border-border my-4 pt-4">
-                  <Button 
-                    variant="outline" 
-                    className="w-full rounded-xl justify-start" 
-                    onClick={() => {
-                      toggleTheme();
-                      // Theme toggle এ শীট বন্ধ করা হবে না
-                    }}
+                  <Button
+                    variant="outline"
+                    className="w-full rounded-xl justify-start"
+                    onClick={toggleTheme}
                   >
-                    {theme === 'light' ? (
-                      <>🌙 Dark Mode</>
-                    ) : (
-                      <>☀️ Light Mode</>
-                    )}
+                    {theme === 'light' ? <>🌙 Dark Mode</> : <>☀️ Light Mode</>}
                   </Button>
                 </div>
-                
-                {/* Auth Related Buttons */}
+
+                {/* Auth related buttons */}
                 {isLoggedIn ? (
                   <div className="flex flex-col gap-2">
-                    <Button 
-                      variant="outline" 
-                      className="w-full rounded-xl justify-start" 
-                      onClick={() => handleNavigation('/dashboard')}
-                    >
+                    <Button variant="outline" className="w-full rounded-xl justify-start" onClick={() => handleNavigation('/dashboard')}>
                       Dashboard
                     </Button>
-                    
-                    <Button 
-                      variant="outline" 
-                      className="w-full rounded-xl justify-start" 
-                      onClick={() => handleNavigation('/dashboard/favorites')}
-                    >
+                    <Button variant="outline" className="w-full rounded-xl justify-start" onClick={() => handleNavigation('/dashboard/favorites')}>
                       Favorites
                     </Button>
-                    
-                    <Button 
-                      variant="outline" 
-                      className="w-full rounded-xl justify-start" 
-                      onClick={() => handleNavigation('/dashboard/profile')}
-                    >
+                    <Button variant="outline" className="w-full rounded-xl justify-start" onClick={() => handleNavigation('/dashboard/profile')}>
                       Profile
                     </Button>
-                    
-                    <Button 
-                      variant="outline" 
-                      className="w-full rounded-xl justify-start" 
-                      onClick={() => handleNavigation('/dashboard/notifications')}
-                    >
+                    <Button variant="outline" className="w-full rounded-xl justify-start" onClick={() => handleNavigation('/dashboard/notifications')}>
                       {t('nav.notifications')}
                       {unreadNotif > 0 && (
                         <span className="ml-2 bg-primary text-primary-foreground text-xs rounded-full px-2 py-0.5">
@@ -417,41 +393,21 @@ const Navbar = () => {
                         </span>
                       )}
                     </Button>
-                    
                     {(user?.role === 'admin' || user?.role === 'superadmin') && (
-                      <Button 
-                        variant="outline" 
-                        className="w-full rounded-xl justify-start" 
-                        onClick={() => handleNavigation('/admin')}
-                      >
+                      <Button variant="outline" className="w-full rounded-xl justify-start" onClick={() => handleNavigation('/admin')}>
                         Admin Panel
                       </Button>
                     )}
-                    
-                    <Button 
-                      variant="destructive" 
-                      className="w-full rounded-xl" 
-                      onClick={() => {
-                        logout();
-                        closeSheet();
-                      }}
-                    >
+                    <Button variant="destructive" className="w-full rounded-xl" onClick={() => { logout(); closeSheet(); }}>
                       Logout
                     </Button>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2 mt-4">
-                    <Button 
-                      variant="outline" 
-                      className="w-full rounded-xl" 
-                      onClick={() => handleNavigation('/login')}
-                    >
+                    <Button variant="outline" className="w-full rounded-xl" onClick={() => handleNavigation('/login')}>
                       {t('nav.login')}
                     </Button>
-                    <Button 
-                      className="w-full rounded-xl" 
-                      onClick={() => handleNavigation('/signup')}
-                    >
+                    <Button className="w-full rounded-xl" onClick={() => handleNavigation('/signup')}>
                       {t('nav.signup')}
                     </Button>
                   </div>

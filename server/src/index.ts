@@ -39,7 +39,8 @@ const TRUST_PROXY =
 // ✅ whitelist your domains
 const allowedOrigins = [
  "https://charkihub.vercel.app",
- "https://www.charkihub.vercel.app"
+ "https://www.charkihub.vercel.app",
+//  "http://localhost:3000"
 
 ];
 

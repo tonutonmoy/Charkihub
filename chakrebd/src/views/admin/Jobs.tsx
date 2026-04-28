@@ -149,7 +149,7 @@ const AdminJobs = () => {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 ">
       <ConfirmDialog
         open={!!deleteJobId}
         onOpenChange={(o) => !o && setDeleteJobId(null)}
@@ -158,7 +158,7 @@ const AdminJobs = () => {
         variant="destructive"
         onConfirm={() => void doDeleteJob()}
       />
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 ">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Job Management</h1>
           <p className="text-muted-foreground mt-1">Create, edit, and delete job posts (admin).</p>
@@ -169,7 +169,7 @@ const AdminJobs = () => {
         </Button>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4">
+      <div className="flex flex-col md:flex-row gap-4 " >
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -185,7 +185,7 @@ const AdminJobs = () => {
         </Button>
       </div>
 
-      <Card className="rounded-2xl border-border/50 shadow-sm overflow-hidden">
+      <Card className="rounded-2xl border-border/50 shadow-sm overflow-hidden ">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -279,11 +279,11 @@ const AdminJobs = () => {
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className=" max-h-[90vh] overflow-y-auto rounded-2xl">
+        <DialogContent className=" max-h-[90vh] overflow-y-auto rounded-2xl  ">
           <DialogHeader>
             <DialogTitle>{editingId ? 'Edit job' : 'New job'}</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-3 py-2">
+          <div className="grid gap-3 py-2 ">
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <span className="text-xs font-bold text-muted-foreground">Main category</span>
