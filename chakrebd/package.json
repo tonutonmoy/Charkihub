@@ -2,14 +2,14 @@
   "name": "chakrebd",
   "private": true,
   "version": "1.0.0",
-  "scripts": {
-    "dev": "next dev --port 3000 --hostname 0.0.0.0",
-    "build": "next build",
-    "start": "npm run start --prefix ..",
-    "start:next": "next start --port 3000 --hostname 0.0.0.0",
-    "lint": "next lint",
-    "clean": "rm -rf .next"
-  },
+"scripts": {
+  "dev": "next dev -p 3000 --hostname 0.0.0.0",
+  "build": "next build",
+  "start": "next start -p ${PORT:-3000} --hostname 0.0.0.0",
+  "start:next": "next start -p ${PORT:-3000} --hostname 0.0.0.0",
+  "lint": "next lint",
+  "clean": "rm -rf .next"
+},
   "dependencies": {
     "@base-ui/react": "^1.3.0",
     "@fontsource-variable/geist": "^5.2.8",
