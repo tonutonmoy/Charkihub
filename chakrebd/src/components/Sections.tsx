@@ -149,7 +149,7 @@ export const Testimonials = () => {
     {
       name: 'Rahat Ahmed',
       role: '43rd BCS Cadre',
-      text: 'ChakriHub BD was my daily companion. The structured suggestions and question bank are unmatched.',
+      text: 'TonuChakriHub was my daily companion. The structured suggestions and question bank are unmatched.',
       avatar: 'https://i.pravatar.cc/100?img=11'
     },
     {
@@ -235,13 +235,13 @@ export const Footer = () => {
                   <Link href='/' >
    <Image
       src="/image/logo.png"
-      alt="ChakriHub Logo"
+      alt="TonuChakriHub Logo"
       width={200}
       height={32}
       className="object-contain"
    />
 </Link>
-            <p className="text-muted-foreground leading-relaxed">
+            <p className="text-muted-foreground leading-relaxed mt-5">
               Job search and exam prep for a worldwide audience—<span className="font-medium text-foreground">main focus on Bangladesh</span> government and competitive careers.
             </p>
             <div className="flex items-center gap-4">
@@ -290,14 +290,14 @@ export const Footer = () => {
               </li>
               <li className="flex items-center gap-3">
                 <Mail className="w-5 h-5 text-primary shrink-0" />
-                <span>support@chakrihub.bd</span>
+                <span>support@TonuChakriHub.bd</span>
               </li>
             </ul>
           </div>
         </div>
         
         <div className="pt-8 border-t border-border text-center md:text-left text-sm text-muted-foreground">
-          <p>© 2026 ChakriHub BD. All rights reserved.</p>
+          <p>© 2026 TonuChakriHub. All rights reserved.</p>
         </div>
       </div>
     </footer>

@@ -24,13 +24,13 @@ export default function About() {
           >
             <span className="inline-flex items-center gap-2 rounded-full border border-border/80 bg-card/80 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-muted-foreground">
               <Building2 className="w-3.5 h-3.5 text-primary" />
-              About ChakriHub BD
+              About TonuChakriHub
             </span>
             <h1 className="mt-6 text-4xl md:text-5xl font-black tracking-tight text-balance">
               Built for job seekers worldwide
             </h1>
             <p className="mt-5 text-lg text-muted-foreground leading-relaxed max-w-2xl mx-auto">
-              ChakriHub BD is for anyone chasing better opportunities across borders—while our{' '}
+              TonuChakriHub is for anyone chasing better opportunities across borders—while our{' '}
               <span className="font-semibold text-foreground">main focus stays on Bangladesh</span>: government and
               competitive jobs, exam prep, listings, and community. Built by{' '}
               <span className="font-semibold text-foreground"><a href="https://tonusoft.com/">TonuSoft</a></span> for a clear, professional experience.
@@ -47,7 +47,7 @@ export default function About() {
               <h2 className="text-2xl md:text-3xl font-black tracking-tight mb-4">Our mission</h2>
               <p className="text-muted-foreground leading-relaxed">
                 We believe access to structured exam prep, timely job listings, and peer support should not be scattered
-                across dozens of sites—whether you are in Dhaka or abroad. ChakriHub BD brings jobs, preparation resources,
+                across dozens of sites—whether you are in Dhaka or abroad. TonuChakriHub brings jobs, preparation resources,
                 Q-bank, CV tools, and community together, with{' '}
                 <span className="font-medium text-foreground">Bangladesh opportunities and exams as our core priority</span>.
               </p>
@@ -60,7 +60,7 @@ export default function About() {
                 <div>
                   <a href="https://tonusoft.com/" className="font-bold text-lg mb-2">TonuSoft</a>
                   <p className="text-sm text-muted-foreground leading-relaxed">
-                    ChakriHub BD is a <a href="https://tonusoft.com/">TonuSoft</a> product—built with attention to quality, security, and a user experience
+                    TonuChakriHub is a <a href="https://tonusoft.com/">TonuSoft</a> product—built with attention to quality, security, and a user experience
                     suitable for serious exam preparation and professional networking.
                   </p>
                 </div>
@@ -74,7 +74,7 @@ export default function About() {
           <div className="text-center max-w-2xl mx-auto mb-12">
             <h2 className="text-2xl md:text-3xl font-black tracking-tight">Leadership</h2>
             <p className="mt-3 text-muted-foreground">
-              The team behind <a href="https://tonusoft.com/">TonuSoft</a> and ChakriHub BD
+              The team behind <a href="https://tonusoft.com/">TonuSoft</a> and TonuChakriHub
             </p>
           </div>
           <div className="grid md:grid-cols-2 gap-8">
@@ -99,7 +99,7 @@ export default function About() {
                 <p className="text-xs font-bold uppercase tracking-wider text-primary mb-1">Founder &amp; CEO</p>
                 <h3 className="text-xl font-black">Showmic Arefin Tonmoy</h3>
                 <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
-                  Leading product vision and strategy for <a href="https://tonusoft.com/">TonuSoft</a> and ChakriHub BD—tools for job seekers globally, with
+                  Leading product vision and strategy for <a href="https://tonusoft.com/">TonuSoft</a> and TonuChakriHub—tools for job seekers globally, with
                   Bangladesh as the primary market and deepest investment.
                 </p>
               </div>
@@ -141,10 +141,10 @@ export default function About() {
                       Contact
                     </h3>
                     <a
-                      href="mailto:support@chakrihub.bd"
+                      href="mailto:support@TonuChakriHub.bd"
                       className="mt-2 text-primary font-semibold hover:underline"
                     >
-                      support@chakrihub.bd
+                      support@TonuChakriHub.bd
                     </a>
                   </div>
                 </div>

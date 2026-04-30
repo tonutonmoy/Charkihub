@@ -3,7 +3,7 @@ import { Providers } from './providers';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'ChakriHub BD',
+  title: 'TonuChakriHub',
   description:
     'বাংলাদেশে সরকারি চাকরি, পরীক্ষার প্রস্তুতি, সাজেশন, প্রশ্ন ব্যাংক ও সিভি বিল্ডার',
 };

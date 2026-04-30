@@ -38,7 +38,7 @@ const TRUST_PROXY =
 
 // ✅ whitelist your domains
 const allowedOrigins = [
- "https://chakrihub.tonusoft.com",
+ "https://TonuChakriHub.tonusoft.com",
 
 //  "http://localhost:3000"
 

@@ -67,7 +67,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
               </div>
               {isSidebarOpen && (
                 <span className="text-lg font-bold tracking-tight whitespace-nowrap">
-                  ChakriHub <span className="text-primary">Admin</span>
+                  TonuChakriHub <span className="text-primary">Admin</span>
                 </span>
               )}
             </Link>

@@ -121,7 +121,7 @@ const Navbar = () => {
          <Link href='/' >
    <Image
       src="/image/logo.png"
-      alt="ChakriHub Logo"
+      alt="TonuChakriHub Logo"
       width={170}
       height={32}
       className="object-contain"

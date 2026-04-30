@@ -49,7 +49,7 @@ const EN: Record<string, string> = {
   'nav.country': 'Country',
   'nav.notifications': 'Notifications',
   'common.apiError': 'Could not load data from the API. Start the backend (port 4000) or use Next proxy (see .env.example).',
-  'brand.name': 'ChakriHub',
+  'brand.name': 'TonuChakriHub',
   'brand.tagline': 'Worldwide jobs · main focus on Bangladesh',
   'hero.badge': 'Global platform · BD-first careers',
   'hero.titleWW': 'Government, private & local jobs — worldwide',

@@ -208,7 +208,7 @@ async function main() {
     console.log('[seed] suggestions already exist — skip suggestions');
   }
 
-  const SEED_ORG = 'ChakriHub Seed';
+  const SEED_ORG = 'TonuChakriHub Seed';
   const alreadyBulk = await prisma.job.count({ where: { organization: SEED_ORG } });
   if (alreadyBulk === 0) {
     const start = new Date();
@@ -420,9 +420,9 @@ async function main() {
         },
       ],
     });
-    console.log('[seed] inserted ChakriHub Seed job pack (IN + BD)');
+    console.log('[seed] inserted TonuChakriHub Seed job pack (IN + BD)');
   } else {
-    console.log('[seed] ChakriHub Seed jobs already present — skip bulk pack');
+    console.log('[seed] TonuChakriHub Seed jobs already present — skip bulk pack');
   }
 
   const filterCount = await prisma.jobFilterOption.count();
