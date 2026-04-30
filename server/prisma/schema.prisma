@@ -72,41 +72,31 @@ model CvDraft {
 
 /// government | private | local
 model Job {
-  id String @id @default(auto()) @map("_id") @db.ObjectId
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  mainCategory  String
+  subCategory   String
+  countryCode   String
+  localArea     String?
+  title         String
+  summary       String
+  description   String?
+  organization  String
+  applyUrl      String?
+  phone         String?
+  startAt       DateTime
+  endAt         DateTime
+  pdfUrl        String?
+  alertEnabled  Boolean   @default(false)
+  alertMessage  String?
+  status        String    @default("draft")
+  likeCount     Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  mainCategory String
-  /// BCS, Bank, School, etc.
-  subCategory  String
-  countryCode  String
-  /// Required when mainCategory = local — matches User.localArea loosely
-  localArea    String?
+  // 👇 NEW FIELD – store attachments as JSON array
+  attachments   Json?
 
-  title        String
-  summary      String
-  description  String?
-  organization String
-
-  applyUrl String?
-  phone    String?
-
-  startAt DateTime
-  endAt   DateTime
-
-  pdfUrl String?
-
-  /// Admin can show an alert callout (off by default)
-  alertEnabled Boolean @default(false)
-  alertMessage String?
-
-  /// draft | published
-  status String @default("draft")
-
-  likeCount Int @default(0)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  likes JobLike[]
+  likes         JobLike[]
 
   @@index([countryCode, mainCategory])
   @@index([countryCode, status])

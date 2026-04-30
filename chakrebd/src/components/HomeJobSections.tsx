@@ -13,6 +13,8 @@ import { useLanguage } from './LanguageContext';
 import { topRatedJobs, type ApiJobListItem } from '@/lib/api';
 
 function JobRow({ job }: { job: ApiJobListItem }) {
+
+  console.log(job)
   const end = new Date(job.endAt);
   return (
     <Link
@@ -85,6 +87,8 @@ export default function HomeJobSections() {
     );
   }
 
+
+  console.log(govt)
   return (
     <section className="py-20 bg-muted/20 border-y border-border/40">
       <div className="container mx-auto px-4 space-y-16">

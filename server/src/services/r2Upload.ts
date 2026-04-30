@@ -1,4 +1,5 @@
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+// lib/r2.ts
+import { PutObjectCommand, DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { randomUUID } from 'node:crypto';
 
 const MIME_EXT: Record<string, string> = {
@@ -28,7 +29,7 @@ function requireR2Env() {
 
   const placeholder = /^REPLACE_/i.test(bucket || '') || /^REPLACE_/i.test(publicBase || '') || /xxxxx/i.test(publicBase || '');
   if (!endpoint || !accessKeyId || !secretAccessKey || !bucket || !publicBase || placeholder) {
-    throw new Error('R2 not configured correctly. Bucket must be "chakrihub-storage"');
+    throw new Error('R2 not configured correctly.');
   }
 
   const client = new S3Client({
@@ -82,5 +83,33 @@ export async function uploadBase64FileToR2(base64OrDataUrl: string): Promise<str
   return `${publicBase}/${key}`;
 }
 
-// পুরনো নামে অ্যালিয়াস – যাতে আপনার বিদ্যমান import কাজ করে
+// Alias for backward compatibility
 export const uploadBase64ImageToR2 = uploadBase64FileToR2;
+
+// ----------------- DELETE FUNCTION -----------------
+export async function deleteFileFromR2(fileUrl: string): Promise<void> {
+  const { client, bucket, publicBase } = requireR2Env();
+
+  // Extract the object key from the public URL
+  const key = fileUrl.replace(publicBase + '/', '');
+  if (!key || key === fileUrl) {
+    throw new Error(`Invalid file URL - cannot extract key from ${fileUrl}`);
+  }
+
+  await client.send(new DeleteObjectCommand({
+    Bucket: bucket,
+    Key: key,
+  }));
+}
+
+// Safe version for client-side error handling
+export async function deleteFileFromR2Safe(fileUrl: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await deleteFileFromR2(fileUrl);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Delete failed' };
+  }
+}
+
+
