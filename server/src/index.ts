@@ -29,20 +29,15 @@ import { registerMessageRoutes } from './routes/messages.js';
 import { registerStatsRoutes } from './routes/stats.js';
 import { registerQuestionBankRoutes } from './routes/questionBank.js';
 
-const PORT = Number(process.env.PORT) || 4000;
+const PORT = Number(process.env.PORT) || 3006;
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-only-change-in-production';
 
 const TRUST_PROXY =
   process.env.TRUST_PROXY === '1' ||
   process.env.NODE_ENV === 'production';
 
-// ✅ whitelist your domains
-const allowedOrigins = [
- "https://chakrihub.tonusoft.com",
-
-//  "http://localhost:3000"
-
-];
+// ✅ allowed origin
+const FRONTEND_ORIGIN = "https://chakrihub.tonusoft.com";
 
 if (!process.env.DATABASE_URL) {
   console.error('DATABASE_URL is required');
@@ -52,50 +47,59 @@ if (!process.env.DATABASE_URL) {
 const app = Fastify({
   logger: true,
   trustProxy: TRUST_PROXY,
-  bodyLimit: 12 * 1024 * 1024,
+  bodyLimit: 20 * 1024 * 1024,
   requestIdHeader: 'x-request-id',
   genReqId: () => randomUUID(),
 });
 
 
-// ✅🔥 FIXED CORS CONFIG
+// ==========================
+// ✅ GLOBAL CORS (SAFE)
+// ==========================
 await app.register(cors, {
   origin: (origin, cb) => {
-    // allow server-to-server / curl
     if (!origin) return cb(null, true);
 
-    if (allowedOrigins.includes(origin)) {
+    const cleanOrigin = origin.replace(/\/$/, '');
+
+    if (cleanOrigin === FRONTEND_ORIGIN) {
       return cb(null, true);
     }
 
-    return cb(new Error('Not allowed by CORS'), false);
+    return cb(null, false);
   },
-
   credentials: true,
-
-  methods: [
-    'GET',
-    'POST',
-    'PUT',
-    'PATCH',   // ✅ IMPORTANT
-    'DELETE',
-    'OPTIONS',
-  ],
-
-  allowedHeaders: [
-    'Content-Type',
-    'Authorization',
-    'X-Requested-With',
-  ],
-
-  exposedHeaders: ['set-cookie'],
-
-  preflightContinue: false,
-  optionsSuccessStatus: 204,
 });
 
 
-// ✅ Rate limit
+// ==========================
+// ✅ FORCE CORS HEADERS (FIX ALL ISSUES)
+// ==========================
+app.addHook('onSend', async (req, reply, payload) => {
+  reply.header('Access-Control-Allow-Origin', FRONTEND_ORIGIN);
+  reply.header('Access-Control-Allow-Credentials', 'true');
+  reply.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  return payload;
+});
+
+
+// ==========================
+// ✅ HANDLE PREFLIGHT (IMPORTANT)
+// ==========================
+app.options('*', async (req, reply) => {
+  reply
+    .header('Access-Control-Allow-Origin', FRONTEND_ORIGIN)
+    .header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS')
+    .header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+    .code(204)
+    .send();
+});
+
+
+// ==========================
+// ✅ RATE LIMIT
+// ==========================
 await app.register(rateLimit, {
   global: true,
   max: 800,
@@ -103,14 +107,18 @@ await app.register(rateLimit, {
 });
 
 
+// ==========================
 // ✅ JWT
+// ==========================
 await app.register(fastifyJwt, {
   secret: JWT_SECRET,
   sign: { expiresIn: '14d' },
 });
 
 
-// ✅ Auth decorator
+// ==========================
+// ✅ AUTH DECORATOR
+// ==========================
 app.decorate(
   'authenticate',
   async function (request: FastifyRequest, reply: FastifyReply) {
@@ -123,10 +131,11 @@ app.decorate(
 );
 
 
-// ✅ Health
+// ==========================
+// ✅ HEALTH CHECK
+// ==========================
 app.get('/health', async () => ({
   ok: true,
-  service: 'chakrebd-api',
 }));
 
 app.get('/health/ready', async (req, reply) => {
@@ -134,13 +143,15 @@ app.get('/health/ready', async (req, reply) => {
     await prisma.$runCommandRaw({ ping: 1 });
     return { ok: true, db: 'up' };
   } catch (err) {
-    req.log.error({ err }, 'DB check failed');
-    return reply.code(503).send({ ok: false, db: 'down' });
+    req.log.error({ err }, 'DB failed');
+    return reply.code(503).send({ ok: false });
   }
 });
 
 
-// ✅ Routes
+// ==========================
+// ✅ ROUTES
+// ==========================
 registerAuthRoutes(app);
 registerSuperAdminRoutes(app);
 registerJobFilterRoutes(app);
@@ -161,13 +172,17 @@ registerStatsRoutes(app);
 registerQuestionBankRoutes(app);
 
 
-// ✅ Shutdown
+// ==========================
+// ✅ SHUTDOWN
+// ==========================
 app.addHook('onClose', async () => {
   await prisma.$disconnect();
 });
 
 
-// ✅ Start server
+// ==========================
+// ✅ START SERVER
+// ==========================
 try {
   await prisma.$connect();
   await ensureUploadDir();
