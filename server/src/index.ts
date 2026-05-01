@@ -10,6 +10,7 @@ import { prisma } from './db.js';
 import { ensureSuperAdmin } from './ensureSuperAdmin.js';
 import { fixLegacyUserTimestamps } from './fixLegacyUserTimestamps.js';
 
+// routes
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerCvRoutes } from './routes/cv.js';
 import { registerUploadRoutes } from './routes/upload.js';
@@ -30,72 +31,27 @@ import { registerStatsRoutes } from './routes/stats.js';
 import { registerQuestionBankRoutes } from './routes/questionBank.js';
 
 const PORT = Number(process.env.PORT) || 3006;
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-only-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-only-change';
 
-const TRUST_PROXY =
-  process.env.TRUST_PROXY === '1' ||
-  process.env.NODE_ENV === 'production';
-
-// ✅ allowed origin
-const FRONTEND_ORIGIN = "https://chakrihub.tonusoft.com";
-
-if (!process.env.DATABASE_URL) {
-  console.error('DATABASE_URL is required');
-  process.exit(1);
-}
+const FRONTEND_ORIGIN = 'https://chakrihub.tonusoft.com';
 
 const app = Fastify({
   logger: true,
-  trustProxy: TRUST_PROXY,
+  trustProxy: true,
   bodyLimit: 20 * 1024 * 1024,
   requestIdHeader: 'x-request-id',
   genReqId: () => randomUUID(),
 });
 
-
 // ==========================
-// ✅ GLOBAL CORS (SAFE)
+// ✅ CORS (ONLY ONE SOURCE OF TRUTH)
 // ==========================
 await app.register(cors, {
-  origin: (origin, cb) => {
-    if (!origin) return cb(null, true);
-
-    const cleanOrigin = origin.replace(/\/$/, '');
-
-    if (cleanOrigin === FRONTEND_ORIGIN) {
-      return cb(null, true);
-    }
-
-    return cb(null, false);
-  },
+  origin: FRONTEND_ORIGIN,
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 });
-
-
-// ==========================
-// ✅ FORCE CORS HEADERS (FIX ALL ISSUES)
-// ==========================
-app.addHook('onSend', async (req, reply, payload) => {
-  reply.header('Access-Control-Allow-Origin', FRONTEND_ORIGIN);
-  reply.header('Access-Control-Allow-Credentials', 'true');
-  reply.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-  reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  return payload;
-});
-
-
-// ==========================
-// ✅ HANDLE PREFLIGHT (IMPORTANT)
-// ==========================
-app.options('*', async (req, reply) => {
-  reply
-    .header('Access-Control-Allow-Origin', FRONTEND_ORIGIN)
-    .header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS')
-    .header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-    .code(204)
-    .send();
-});
-
 
 // ==========================
 // ✅ RATE LIMIT
@@ -106,7 +62,6 @@ await app.register(rateLimit, {
   timeWindow: '1 minute',
 });
 
-
 // ==========================
 // ✅ JWT
 // ==========================
@@ -114,7 +69,6 @@ await app.register(fastifyJwt, {
   secret: JWT_SECRET,
   sign: { expiresIn: '14d' },
 });
-
 
 // ==========================
 // ✅ AUTH DECORATOR
@@ -130,12 +84,12 @@ app.decorate(
   }
 );
 
-
 // ==========================
-// ✅ HEALTH CHECK
+// ✅ HEALTH
 // ==========================
 app.get('/health', async () => ({
   ok: true,
+  service: 'chakrihub-api',
 }));
 
 app.get('/health/ready', async (req, reply) => {
@@ -143,11 +97,10 @@ app.get('/health/ready', async (req, reply) => {
     await prisma.$runCommandRaw({ ping: 1 });
     return { ok: true, db: 'up' };
   } catch (err) {
-    req.log.error({ err }, 'DB failed');
-    return reply.code(503).send({ ok: false });
+    req.log.error(err);
+    return reply.code(503).send({ ok: false, db: 'down' });
   }
 });
-
 
 // ==========================
 // ✅ ROUTES
@@ -171,14 +124,12 @@ registerMessageRoutes(app);
 registerStatsRoutes(app);
 registerQuestionBankRoutes(app);
 
-
 // ==========================
 // ✅ SHUTDOWN
 // ==========================
 app.addHook('onClose', async () => {
   await prisma.$disconnect();
 });
-
 
 // ==========================
 // ✅ START SERVER
@@ -194,7 +145,7 @@ try {
     host: '0.0.0.0',
   });
 
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 } catch (err) {
   app.log.error(err);
   process.exit(1);
