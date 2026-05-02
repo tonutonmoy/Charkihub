@@ -40,7 +40,7 @@ import { CommentThread } from '../components/CommentThread';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faWhatsapp } from '@fortawesome/free-brands-svg-icons';
 
-// Helper functions for download (same as before)
+// Helper functions for download
 function getFileExtension(url: string, mimeType?: string): string {
   const lastDot = url.lastIndexOf('.');
   if (lastDot !== -1 && lastDot < url.length - 1) {
@@ -92,11 +92,11 @@ async function downloadAsZip(files: { url: string; name: string }[], zipName: st
 
 const JobDetails = () => {
   const params = useParams();
-  const id = params?.id as string;
+  const slug = params?.slug as string;
+  const id = slug?.split('-')[0]; // string id from URL
   const router = useRouter();
   const { isLoggedIn } = useAuth();
 
-  // 👇 Extended type to include attachments
   const [job, setJob] = useState<(ApiJobDetail & { attachments?: any[] }) | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -127,7 +127,7 @@ const JobDetails = () => {
     if (platform === 'facebook') {
       window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank');
     } else if (platform === 'linkedin') {
-      window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`, '_blank');
+      window.open(`https://www.linkedin.com/sharing/share-offsite/?u=${encodeURIComponent(url)}`, '_blank');
     } else if (platform === 'whatsapp') {
       window.open(`https://wa.me/?text=${encodeURIComponent(`${text}\n${url}`)}`, '_blank');
     } else {
@@ -173,6 +173,8 @@ const JobDetails = () => {
       listComments('job', job.id).then((c) => {
         if (c.ok) setComments(c.comments);
       });
+    } else {
+      toast.error('Failed to post comment');
     }
   };
 
@@ -187,7 +189,6 @@ const JobDetails = () => {
     if (!job) return;
     const files: { url: string; name: string }[] = [];
 
-    // Attachments (new field)
     if (job.attachments && Array.isArray(job.attachments)) {
       for (const att of job.attachments) {
         if (att.url) {
@@ -198,7 +199,6 @@ const JobDetails = () => {
       }
     }
 
-    // Legacy pdfUrl
     if (job.pdfUrl && !files.some(f => f.url === job.pdfUrl)) {
       const name = `document_${job.id}.pdf`;
       files.push({ url: job.pdfUrl, name });
@@ -259,7 +259,6 @@ const JobDetails = () => {
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
           <Card className="rounded-[2.5rem] overflow-hidden border-border/50 shadow-2xl shadow-primary/5 bg-card">
-            {/* Header (unchanged) */}
             <div className="bg-primary p-8 md:p-12 text-white relative overflow-hidden">
               <div className="absolute top-0 right-0 p-12 opacity-10"><Building2 className="w-48 h-48" /></div>
               <div className="relative z-10">
@@ -318,7 +317,6 @@ const JobDetails = () => {
                     )}
                     {job.phone && <p className="text-center text-sm font-bold">Phone: <a href={`tel:${job.phone}`}>{job.phone}</a></p>}
 
-                    {/* Download button - shows only when documents exist */}
                     {(job.attachments?.length || job.pdfUrl) && (
                       <Button variant="outline" size="lg" className="w-full h-14 rounded-2xl font-black text-lg border-2 gap-2" onClick={handleDownload} disabled={downloading}>
                         <Download className="w-5 h-5" />

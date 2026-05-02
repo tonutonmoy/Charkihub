@@ -21,6 +21,7 @@ import {
   type JobMainCategory,
   type PublicJobFiltersPayload,
 } from '@/lib/api';
+import { generateSlug } from '../lib/permailink';
 
 function buildJobsQuery(params: Record<string, string | undefined>): string {
   const e = new URLSearchParams();
@@ -493,7 +494,7 @@ const GovtJobs = () => {
                     transition={{ delay: i * 0.03 }}
                   >
                     <ThreeDCard>
-                      <Link href={`/jobs/${job.id}`}>
+                     <Link href={`/jobs/${generateSlug(job.id, job.title)}`}>
                         <Card className="h-full hover:shadow-2xl transition-all duration-500 border-border/50 group bg-card/80 backdrop-blur-sm rounded-[2rem] overflow-hidden">
                           <CardHeader className="pb-4">
                             <div className="flex justify-between items-start mb-4">
