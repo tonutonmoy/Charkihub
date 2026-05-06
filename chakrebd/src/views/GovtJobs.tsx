@@ -1,560 +1,596 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import React, { useEffect, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import Head from 'next/head';
 import { motion } from 'motion/react';
-import { Search, MapPin, Calendar, ArrowRight, SlidersHorizontal, X } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { ThreeDCard } from '../components/ThreeDCard';
-import { useLocation } from '@/lib/locationContext';
-import { useAuth } from '../components/AuthContext';
-import { useLanguage } from '../components/LanguageContext';
+import JSZip from 'jszip';
 import {
-  listJobs,
-  fetchJobFilterOptions,
-  fetchPublicJobFilters,
-  type ApiJobListItem,
-  type JobMainCategory,
-  type PublicJobFiltersPayload,
+  ArrowLeft,
+  Download,
+  Calendar,
+  MapPin,
+  Building2,
+  Facebook,
+  Linkedin,
+  LinkIcon,
+  Heart,
+  Star,
+  AlertTriangle,
+  MessageCircle,
+} from 'lucide-react';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import {
+  getJob,
+  likeJob,
+  unlikeJob,
+  addFavorite,
+  removeFavorite,
+  listComments,
+  postComment,
+  type ApiJobDetail,
+  type ApiCommentNode,
 } from '@/lib/api';
-import { generateSlug } from '../lib/permailink';
+import { toast } from 'sonner';
+import { useAuth } from '../components/AuthContext';
+import { CommentThread } from '../components/CommentThread';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faWhatsapp } from '@fortawesome/free-brands-svg-icons';
 
-function buildJobsQuery(params: Record<string, string | undefined>): string {
-  const e = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) {
-    if (v === undefined || v === '') continue;
-    e.set(k, v);
-  }
-  return e.toString();
+// Helper: slugify a string for clean URLs
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+$/, '');
 }
 
-const GovtJobs = () => {
-  const { countryCode, countryName, setCountryCode } = useLocation();
-  const { isLoggedIn, user } = useAuth();
-  const { t } = useLanguage();
+// Extract numeric ID from a slug like "123-job-title"
+function getIdFromSlug(slug: string): number | null {
+  const match = slug.match(/^(\d+)-/);
+  if (match) {
+    return parseInt(match[1], 10);
+  }
+  // If no numeric prefix, try to see if the whole slug is a number
+  if (/^\d+$/.test(slug)) {
+    return parseInt(slug, 10);
+  }
+  return null;
+}
+
+// Build canonical slug from ID and title
+function makeCanonicalSlug(id: number, title: string): string {
+  return `${id}-${slugify(title)}`;
+}
+
+// Download helpers (unchanged)
+function getFileExtension(url: string, mimeType?: string): string {
+  const lastDot = url.lastIndexOf('.');
+  if (lastDot !== -1 && lastDot < url.length - 1) {
+    const ext = url.slice(lastDot + 1).split('?')[0].toLowerCase();
+    if (ext) return ext;
+  }
+  if (mimeType) {
+    if (mimeType.includes('jpeg') || mimeType.includes('jpg')) return 'jpg';
+    if (mimeType === 'image/png') return 'png';
+    if (mimeType === 'application/pdf') return 'pdf';
+    if (mimeType.includes('zip')) return 'zip';
+  }
+  return 'file';
+}
+
+async function downloadSingleFile(url: string, filename: string) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('Network error');
+  const blob = await response.blob();
+  const blobUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(blobUrl);
+}
+
+async function downloadAsZip(files: { url: string; name: string }[], zipName: string) {
+  const zip = new JSZip();
+  for (const file of files) {
+    const response = await fetch(file.url);
+    if (response.ok) {
+      const blob = await response.blob();
+      zip.file(file.name, blob);
+    }
+  }
+  const content = await zip.generateAsync({ type: 'blob' });
+  const zipUrl = window.URL.createObjectURL(content);
+  const link = document.createElement('a');
+  link.href = zipUrl;
+  link.download = zipName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(zipUrl);
+}
+
+const JobDetails = () => {
+  const params = useParams();
+  const rawSlug = params?.slug as string;
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const skipUrlWrite = useRef(true);
+  const { isLoggedIn } = useAuth();
 
-  const urlCountry = searchParams.get('country');
-  const urlMain = searchParams.get('mainCategory') as JobMainCategory | null;
-  const urlSub = searchParams.get('subCategory') || '';
-  const urlArea = searchParams.get('localArea') || '';
-  const urlSearch = searchParams.get('search') || '';
-  const urlInterest = searchParams.get('interest') === '1';
-  const urlMatchLoc = searchParams.get('matchLoc') === '1';
-
-  const [searchInput, setSearchInput] = useState(urlSearch);
-  const [debouncedSearch, setDebouncedSearch] = useState(urlSearch);
-  const [selectedCat, setSelectedCat] = useState<JobMainCategory | 'all'>(() =>
-    urlMain && ['government', 'private', 'local'].includes(urlMain) ? urlMain : 'all'
-  );
-  const [subCategory, setSubCategory] = useState(urlSub);
-  const [localArea, setLocalArea] = useState(urlArea);
-  const [interestOnly, setInterestOnly] = useState(urlInterest);
-  const [matchUserLocation, setMatchUserLocation] = useState(urlMatchLoc);
-  const [advancedOpen, setAdvancedOpen] = useState(true);
-
-  const [jobs, setJobs] = useState<ApiJobListItem[]>([]);
-  const [total, setTotal] = useState(0);
+  const [job, setJob] = useState<(ApiJobDetail & { attachments?: any[] }) | null>(null);
   const [loading, setLoading] = useState(true);
-  const [filterHints, setFilterHints] = useState<{ subCategories: string[]; localAreas: string[] }>({
-    subCategories: [],
-    localAreas: [],
-  });
-  const [publicFilters, setPublicFilters] = useState<PublicJobFiltersPayload | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [comments, setComments] = useState<ApiCommentNode[]>([]);
+  const [commentText, setCommentText] = useState('');
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-    fetchPublicJobFilters().then((r) => {
-      if (cancelled || !r.ok) return;
-      setPublicFilters(r.data);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (!rawSlug) return;
 
-  useEffect(() => {
-    if (urlCountry && /^[A-Z]{2}$/i.test(urlCountry)) {
-      setCountryCode(urlCountry.toUpperCase());
-    }
-  }, [urlCountry, setCountryCode]);
-
-  useEffect(() => {
-    const tmr = setTimeout(() => setDebouncedSearch(searchInput.trim()), 400);
-    return () => clearTimeout(tmr);
-  }, [searchInput]);
-
-  useEffect(() => {
-    setSearchInput(urlSearch);
-    setDebouncedSearch(urlSearch.trim());
-    if (urlMain && ['government', 'private', 'local'].includes(urlMain)) {
-      setSelectedCat(urlMain);
-    } else if (!urlMain) {
-      setSelectedCat('all');
-    }
-    setSubCategory(urlSub);
-    setLocalArea(urlArea);
-    setInterestOnly(urlInterest);
-    setMatchUserLocation(urlMatchLoc);
-  }, [urlSearch, urlMain, urlSub, urlArea, urlInterest, urlMatchLoc]);
-
-  const categories = useMemo(() => {
-    const base = [
-      { key: 'all' as const, label: t('jobs.typeAll') },
-      { key: 'government' as const, label: t('jobs.typeGov') },
-      { key: 'private' as const, label: t('jobs.typePrivate') },
-      { key: 'local' as const, label: t('jobs.typeLocal') },
-    ];
-    const mains = publicFilters?.mainCategories;
-    if (!mains?.length) return base;
-    return base.map((b) => {
-      if (b.key === 'all') return b;
-      const m = mains.find((x) => x.value === b.key);
-      return m ? { ...b, label: m.label } : b;
-    });
-  }, [t, publicFilters]);
-
-  const subSelectOptions = useMemo(() => {
-    const pack = publicFilters?.subCategoriesByCountry[countryCode];
-    if (!pack) return [] as { value: string; label: string }[];
-    if (selectedCat === 'all') {
-      const map = new Map<string, string>();
-      for (const arr of Object.values(pack)) {
-        for (const o of arr) {
-          if (!map.has(o.value)) map.set(o.value, o.label);
-        }
-      }
-      return Array.from(map.entries())
-        .map(([value, label]) => ({ value, label }))
-        .sort((a, b) => a.label.localeCompare(b.label));
-    }
-    return [...(pack[selectedCat] || [])].sort((a, b) => a.label.localeCompare(b.label));
-  }, [publicFilters, countryCode, selectedCat]);
-
-  const citySelectOptions = useMemo(() => {
-    return publicFilters?.citiesByCountry[countryCode] || [];
-  }, [publicFilters, countryCode]);
-
-  /** Quick filters from DB (JobFilterOption) for the active country only — no hard-coded IN/BD presets. */
-  const quickPresets = useMemo(() => {
-    if (!publicFilters) return [] as { key: string; label: string; apply: () => void }[];
-    const subs = publicFilters.subCategoriesByCountry[countryCode];
-    if (!subs) return [];
-    const out: { key: string; label: string; apply: () => void }[] = [];
-    const mainLabel = (m: JobMainCategory) =>
-      m === 'government' ? t('jobs.typeGov') : m === 'private' ? t('jobs.typePrivate') : t('jobs.typeLocal');
-    for (const main of ['government', 'private', 'local'] as const) {
-      for (const o of (subs[main] || []).slice(0, 2)) {
-        out.push({
-          key: `${main}-${o.value}`,
-          label: `${mainLabel(main)} · ${o.label}`,
-          apply: () => {
-            setSelectedCat(main);
-            setSubCategory(o.value);
-            setLocalArea('');
-          },
-        });
-      }
-    }
-    for (const c of (publicFilters.citiesByCountry[countryCode] || []).slice(0, 2)) {
-      out.push({
-        key: `city-${c.value}`,
-        label: `${t('jobs.typeLocal')} · ${c.label}`,
-        apply: () => {
-          setSelectedCat('local');
-          setSubCategory('');
-          setLocalArea(c.value);
-        },
-      });
-    }
-    return out.slice(0, 8);
-  }, [publicFilters, countryCode, t]);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchJobFilterOptions({
-      country: countryCode,
-      mainCategory: selectedCat === 'all' ? undefined : selectedCat,
-    }).then((r) => {
-      if (cancelled) return;
-      if (r.ok) {
-        setFilterHints({ subCategories: r.subCategories, localAreas: r.localAreas });
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [countryCode, selectedCat]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    listJobs({
-      country: countryCode,
-      mainCategory: selectedCat === 'all' ? undefined : selectedCat,
-      subCategory: subCategory.trim() || undefined,
-      localArea: localArea.trim() || undefined,
-      search: debouncedSearch || undefined,
-      interestMatch: interestOnly && isLoggedIn,
-      matchUserLocation: matchUserLocation && isLoggedIn,
-      limit: 48,
-    }).then((r) => {
-      if (cancelled) return;
-      if (r.ok) {
-        setJobs(r.jobs);
-        setTotal(r.total);
-      }
+    // Extract numeric ID from the slug
+    const jobId = getIdFromSlug(rawSlug);
+    if (!jobId) {
+      setError('Invalid job link (ID missing)');
       setLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    countryCode,
-    selectedCat,
-    subCategory,
-    localArea,
-    debouncedSearch,
-    interestOnly,
-    matchUserLocation,
-    isLoggedIn,
-  ]);
-
-  const pushUrl = useCallback(() => {
-    const q = buildJobsQuery({
-      country: countryCode,
-      mainCategory: selectedCat === 'all' ? undefined : selectedCat,
-      subCategory: subCategory.trim() || undefined,
-      localArea: localArea.trim() || undefined,
-      search: debouncedSearch || undefined,
-      interest: interestOnly ? '1' : undefined,
-      matchLoc: matchUserLocation ? '1' : undefined,
-    });
-    router.replace(q ? `/jobs?${q}` : '/jobs', { scroll: false });
-  }, [
-    router,
-    countryCode,
-    selectedCat,
-    subCategory,
-    localArea,
-    debouncedSearch,
-    interestOnly,
-    matchUserLocation,
-  ]);
-
-  useEffect(() => {
-    if (skipUrlWrite.current) {
-      skipUrlWrite.current = false;
       return;
     }
-    pushUrl();
-  }, [pushUrl]);
 
-  const clearFilters = () => {
-    setSearchInput('');
-    setDebouncedSearch('');
-    setSelectedCat('all');
-    setSubCategory('');
-    setLocalArea('');
-    setInterestOnly(false);
-    setMatchUserLocation(false);
-    skipUrlWrite.current = true;
-    const q = buildJobsQuery({ country: countryCode });
-    router.replace(q ? `/jobs?${q}` : '/jobs', { scroll: false });
-    queueMicrotask(() => {
-      skipUrlWrite.current = false;
-    });
+    setLoading(true);
+    setError(null);
+
+    // Fetch job using the numeric ID (as string)
+    getJob(jobId.toString())
+      .then(async (r) => {
+        if (!r.ok) {
+          setError(r.error || 'Failed to load job');
+          setLoading(false);
+          return;
+        }
+
+        const jobData:any = r.job;
+        setJob(jobData);
+
+        // Build the correct canonical slug
+        const correctSlug = makeCanonicalSlug(jobData?.id, jobData.title);
+        const currentPath = window.location.pathname;
+
+        // Rewrite URL if needed (no page reload)
+        if (currentPath !== `/jobs/${correctSlug}`) {
+          window.history.replaceState(null, '', `/jobs/${correctSlug}`);
+        }
+
+        // Load comments
+        const commentsRes = await listComments('job', jobData.id.toString());
+        if (commentsRes.ok) {
+          setComments(commentsRes.comments);
+        }
+      })
+      .catch((err) => {
+        console.error(err);
+        setError('Network error. Please try again.');
+      })
+      .finally(() => setLoading(false));
+  }, [rawSlug]);
+
+  const handleShare = (platform: string) => {
+    if (!job) return;
+    const url = typeof window !== 'undefined' ? window.location.href : '';
+    const text = `Job: ${job.title} — ${job.organization}`;
+    if (platform === 'facebook') {
+      window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank');
+    } else if (platform === 'linkedin') {
+      window.open(`https://www.linkedin.com/sharing/share-offsite/?u=${encodeURIComponent(url)}`, '_blank');
+    } else if (platform === 'whatsapp') {
+      window.open(`https://wa.me/?text=${encodeURIComponent(`${text}\n${url}`)}`, '_blank');
+    } else {
+      navigator.clipboard.writeText(url);
+      toast.success('Link copied');
+    }
   };
 
-  const resultsLabel = t('jobs.resultsCount').replace('{n}', String(jobs.length));
+  const toggleLike = async () => {
+    if (!job || !isLoggedIn) {
+      router.push('/login');
+      return;
+    }
+    if (job.liked) {
+      const r = await unlikeJob(job.id);
+      if (r.ok) setJob({ ...job, liked: false, likeCount: r.likeCount });
+    } else {
+      const r = await likeJob(job.id);
+      if (r.ok) setJob({ ...job, liked: true, likeCount: r.likeCount });
+    }
+  };
+
+  const toggleFav = async () => {
+    if (!job || !isLoggedIn) {
+      router.push('/login');
+      return;
+    }
+    if (job.favorited) {
+      const r = await removeFavorite('job', job.id);
+      if (r.ok) setJob({ ...job, favorited: false });
+    } else {
+      const r = await addFavorite('job', job.id);
+      if (r.ok) setJob({ ...job, favorited: true });
+    }
+  };
+
+  const sendComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!job || !commentText.trim() || !isLoggedIn) return;
+    const r = await postComment('job', job.id, commentText.trim());
+    if (r.ok) {
+      setCommentText('');
+      const commentsRes = await listComments('job', job.id.toString());
+      if (commentsRes.ok) setComments(commentsRes.comments);
+    } else {
+      toast.error('Failed to post comment');
+    }
+  };
+
+  const refreshComments = async () => {
+    if (!job) return;
+    const commentsRes = await listComments('job', job.id.toString());
+    if (commentsRes.ok) setComments(commentsRes.comments);
+  };
+
+  const handleDownload = async () => {
+    if (!job) return;
+    const files: { url: string; name: string }[] = [];
+
+    if (job.attachments && Array.isArray(job.attachments)) {
+      for (const att of job.attachments) {
+        if (att.url) {
+          const ext = getFileExtension(att.url, att.mimeType);
+          const name = att.name || `attachment_${Date.now()}.${ext}`;
+          files.push({ url: att.url, name });
+        }
+      }
+    }
+
+    if (job.pdfUrl && !files.some(f => f.url === job.pdfUrl)) {
+      const name = `document_${job.id}.pdf`;
+      files.push({ url: job.pdfUrl, name });
+    }
+
+    if (files.length === 0) {
+      toast.info('No documents attached to this job.');
+      return;
+    }
+
+    setDownloading(true);
+    try {
+      if (files.length === 1) {
+        await downloadSingleFile(files[0].url, files[0].name);
+        toast.success(`Downloaded: ${files[0].name}`);
+      } else {
+        const zipName = `${job.title.replace(/[^a-z0-9]/gi, '_')}_documents.zip`;
+        await downloadAsZip(files, zipName);
+        toast.success(`Downloaded ${files.length} files as ZIP`);
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Download failed. Please try again.');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const getDownloadButtonText = () => {
+    if (!job) return 'Download';
+    let count = 0;
+    if (job.attachments) count += job.attachments.length;
+    if (job.pdfUrl) count++;
+    if (count === 0) return 'No documents';
+    if (count === 1) return 'Download document';
+    return `Download all (${count} files)`;
+  };
+
+  // SEO meta data
+  const pageTitle = job ? `${job.title} - ${job.organization} | ChakriHub` : 'Job Details | ChakriHub';
+  const pageDescription = job?.summary || job?.description?.slice(0, 160) || 'Find your next job opportunity on ChakriHub.';
+  const pageUrl = typeof window !== 'undefined' ? window.location.href : '';
+  const defaultImage = 'https://chakrihub.tonusoft.com/og-image.jpg'; // change to your actual default OG image
+
+  if (loading) {
+    return (
+      <>
+        <Head>
+          <title>Loading... | ChakriHub</title>
+        </Head>
+        <div className="pt-32 pb-20 min-h-screen container mx-auto px-4 text-center text-muted-foreground">
+          Loading…
+        </div>
+      </>
+    );
+  }
+
+  if (error || !job) {
+    return (
+      <>
+        <Head>
+          <title>Job Not Found | ChakriHub</title>
+        </Head>
+        <div className="pt-32 pb-20 min-h-screen container mx-auto px-4">
+          <p className="text-center text-destructive">{error || 'Job not found'}</p>
+          <Button variant="ghost" className="mt-8" onClick={() => router.push('/jobs')}>
+            Back to jobs
+          </Button>
+        </div>
+      </>
+    );
+  }
 
   return (
-    <div className="pt-32 pb-20 min-h-screen bg-muted/30">
-      <div className="container mx-auto px-4">
-        <div className="mb-10 text-center">
-          <h1 className="text-4xl md:text-5xl font-black mb-4 tracking-tight">
-            {t('jobs.pageTitle')} — {countryName}
-          </h1>
-          <p className="text-muted-foreground text-lg max-w-3xl mx-auto">{t('jobs.pageSubtitle')}</p>
-        </div>
+    <>
+      <Head>
+        <title>{pageTitle}</title>
+        <meta name="description" content={pageDescription} />
+        <meta name="robots" content="index, follow" />
+        <link rel="canonical" href={pageUrl} />
 
-        <div className="flex flex-col lg:grid lg:grid-cols-[minmax(260px,300px)_1fr] xl:grid-cols-[minmax(280px,320px)_1fr] gap-8 lg:gap-10 items-start">
-          <aside className="w-full space-y-4 lg:sticky lg:top-28 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pr-1 lg:pb-4 shrink-0 no-scrollbar">
-            <div className="rounded-[1.5rem] bg-card p-5 shadow-xl shadow-primary/5 border border-border/50 space-y-4">
-              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('jobs.sidebarSearch')}</p>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                <Input
-                  placeholder={t('jobs.searchPlaceholder')}
-                  className="pl-10 h-11 rounded-xl border-border/50 focus-visible:ring-primary/30 text-sm"
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                />
-              </div>
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="article" />
+        <meta property="og:title" content={pageTitle} />
+        <meta property="og:description" content={pageDescription} />
+        <meta property="og:url" content={pageUrl} />
+        <meta property="og:image" content={defaultImage} />
+        <meta property="og:site_name" content="ChakriHub" />
 
-              <div>
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
-                  {t('jobs.sidebarJobType')}
-                </p>
-                <div className="flex flex-col gap-2">
-                  {categories.map((cat) => (
-                    <Button
-                      key={cat.key}
-                      variant={selectedCat === cat.key ? 'default' : 'outline'}
-                      className="rounded-xl h-10 px-3 font-bold text-sm w-full justify-start"
-                      onClick={() => setSelectedCat(cat.key)}
-                    >
-                      {cat.label}
-                    </Button>
-                  ))}
-                </div>
-              </div>
+        {/* Twitter */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={pageTitle} />
+        <meta name="twitter:description" content={pageDescription} />
+        <meta name="twitter:image" content={defaultImage} />
 
-              <div className="flex flex-col gap-2 pt-2 border-t border-border/50">
-                <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                  {t('jobs.advanced')}
-                </span>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="rounded-xl text-xs flex-1"
-                    onClick={() => setAdvancedOpen(!advancedOpen)}
-                  >
-                    <SlidersHorizontal className="w-3.5 h-3.5 mr-1 shrink-0" />
-                    {advancedOpen ? '−' : '+'}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    className="rounded-xl text-xs flex-1"
-                    onClick={clearFilters}
-                  >
-                    <X className="w-3.5 h-3.5 mr-1 shrink-0" />
-                    {t('jobs.clearFilters')}
-                  </Button>
-                </div>
-              </div>
-            </div>
+        {/* JSON-LD JobPosting structured data */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "JobPosting",
+              title: job.title,
+              description: job.description,
+              datePosted: job.startAt,
+              validThrough: job.endAt,
+              hiringOrganization: {
+                "@type": "Organization",
+                name: job.organization,
+              },
+              jobLocation: {
+                "@type": "Place",
+                address: {
+                  "@type": "PostalAddress",
+                  addressLocality: job.localArea,
+                  addressCountry: job.countryCode,
+                },
+              },
+              employmentType: job.mainCategory,
+              identifier: {
+                "@type": "PropertyValue",
+                value: job.id.toString(),
+              },
+            }),
+          }}
+        />
+      </Head>
 
-            {advancedOpen ? (
-              <div className="space-y-4 bg-card/90 p-5 rounded-[1.5rem] border border-border/50 shadow-sm">
-                <div>
-                  <p className="text-sm font-bold mb-2">{t('nav.country')}</p>
-                  <select
-                    className="w-full h-11 rounded-xl border border-border bg-background px-3 text-sm font-medium"
-                    value={countryCode}
-                    onChange={(e) => setCountryCode(e.target.value)}
-                  >
-                    {(publicFilters?.countries?.length
-                      ? publicFilters.countries
-                      : [{ value: countryCode, label: countryName }]
-                    ).map((c) => (
-                      <option key={c.value} value={c.value}>
-                        {c.label} ({c.value})
-                      </option>
-                    ))}
-                  </select>
+      <div className="pt-32 pb-20 min-h-screen bg-muted/30">
+        <div className="container mx-auto px-4 max-w-4xl">
+          <Button
+            variant="ghost"
+            className="mb-8 font-bold hover:bg-primary/10 hover:text-primary transition-all rounded-xl"
+            onClick={() => router.push('/jobs')}
+          >
+            <ArrowLeft className="mr-2 w-5 h-5" /> Back to Jobs
+          </Button>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <Card className="rounded-[2.5rem] overflow-hidden border-border/50 shadow-2xl shadow-primary/5 bg-card">
+              <div className="bg-primary p-8 md:p-12 text-white relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-12 opacity-10">
+                  <Building2 className="w-48 h-48" />
                 </div>
-                <div>
-                  <p className="text-sm font-bold mb-2">{t('jobs.subCategoryLabel')}</p>
-                  <p className="text-xs text-muted-foreground mb-2">{t('jobs.subCategoryHint')}</p>
-                  <select
-                    className="w-full h-10 rounded-xl border border-border bg-background px-3 text-sm mb-2"
-                    value=""
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      if (v) setSubCategory(v);
-                    }}
-                  >
-                    <option value="">{t('jobs.pickSub')}</option>
-                    {subSelectOptions.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                  <Input
-                    className="rounded-xl h-10 text-sm"
-                    value={subCategory}
-                    onChange={(e) => setSubCategory(e.target.value)}
-                    list="job-sub-suggestions"
-                    placeholder={t('jobs.subCategoryHint')}
-                  />
-                  <datalist id="job-sub-suggestions">
-                    {filterHints.subCategories.map((s) => (
-                      <option key={s} value={s} />
-                    ))}
-                  </datalist>
-                </div>
-                <div>
-                  <p className="text-sm font-bold mb-2">{t('jobs.localAreaLabel')}</p>
-                  <p className="text-xs text-muted-foreground mb-2">{t('jobs.localAreaHint')}</p>
-                  <select
-                    className="w-full h-10 rounded-xl border border-border bg-background px-3 text-sm mb-2"
-                    value=""
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      if (v) setLocalArea(v);
-                    }}
-                  >
-                    <option value="">{t('jobs.pickCity')}</option>
-                    {citySelectOptions.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                  <Input
-                    className="rounded-xl h-10 text-sm"
-                    value={localArea}
-                    onChange={(e) => setLocalArea(e.target.value)}
-                    list="job-area-suggestions"
-                    placeholder={t('jobs.localAreaHint')}
-                  />
-                  <datalist id="job-area-suggestions">
-                    {filterHints.localAreas.map((s) => (
-                      <option key={s} value={s} />
-                    ))}
-                  </datalist>
-                </div>
-                <div className="flex flex-col gap-2">
-                  {isLoggedIn && (user?.interests?.length ?? 0) > 0 ? (
-                    <Button
-                      variant={interestOnly ? 'default' : 'outline'}
-                      className="rounded-xl h-auto min-h-10 py-2 px-3 text-left text-sm w-full justify-start whitespace-normal"
-                      onClick={() => setInterestOnly(!interestOnly)}
-                    >
-                      {t('jobs.matchInterest')} ({user?.interests?.join(', ')})
-                    </Button>
-                  ) : (
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      {isLoggedIn ? t('jobs.matchInterestsHint') : `${t('jobs.matchInterest')} — ${t('nav.login')}`}
-                    </p>
-                  )}
-                  {isLoggedIn && user?.localArea ? (
-                    <Button
-                      variant={matchUserLocation ? 'default' : 'outline'}
-                      className="rounded-xl text-sm w-full justify-start"
-                      onClick={() => setMatchUserLocation(!matchUserLocation)}
-                    >
-                      {t('jobs.matchMyLocation')} ({user.localArea})
-                    </Button>
-                  ) : (
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      {isLoggedIn ? t('jobs.matchLocationHint') : `${t('jobs.matchMyLocation')} — ${t('nav.login')}`}
-                    </p>
-                  )}
-                </div>
-                {quickPresets.length > 0 ? (
-                  <div className="flex flex-col gap-2 pt-3 border-t border-border/60">
-                    <span className="text-xs font-bold text-muted-foreground">
-                      {t('jobs.quickFilters')} ({countryCode})
-                    </span>
-                    <div className="flex flex-col gap-2">
-                      {quickPresets.map((q) => (
-                        <Button
-                          key={q.key}
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="rounded-xl h-auto min-h-9 py-2 px-3 text-left text-xs font-medium justify-start whitespace-normal"
-                          onClick={q.apply}
-                        >
-                          {q.label}
-                        </Button>
-                      ))}
+                <div className="relative z-10">
+                  <div className="flex flex-wrap gap-3 mb-6">
+                    <Badge className="bg-white/20 hover:bg-white/30 text-white border-none rounded-lg px-4 py-1 font-black uppercase tracking-widest">
+                      {job.subCategory}
+                    </Badge>
+                    <Badge className="bg-secondary text-white border-none rounded-lg px-4 py-1 font-black uppercase tracking-widest">
+                      {job.mainCategory}
+                    </Badge>
+                  </div>
+                  <h1 className="text-3xl md:text-5xl font-black mb-4 tracking-tight leading-tight">
+                    {job.title}
+                  </h1>
+                  <p className="text-xl text-primary-foreground/90 font-bold mb-4 flex items-center gap-2">
+                    <Building2 className="w-6 h-6" />
+                    {job.organization}
+                  </p>
+                  <p className="text-primary-foreground/90 mb-6 font-medium">
+                    {job.summary}
+                  </p>
+                  <div className="flex flex-wrap gap-6 text-sm font-bold">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-5 h-5" />
+                      {job.localArea || job.countryCode}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-5 h-5" />
+                      Apply window: {new Date(job.startAt).toLocaleString()} —{' '}
+                      {new Date(job.endAt).toLocaleString()}
                     </div>
                   </div>
-                ) : null}
+                </div>
               </div>
-            ) : null}
-          </aside>
 
-          <div className="min-w-0 w-full">
-            <p className="text-sm text-muted-foreground mb-6 font-medium">{resultsLabel}</p>
+              <CardContent className="p-8 md:p-12">
+                {job.alertEnabled && job.alertMessage && (
+                  <div className="mb-8 p-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 flex gap-3">
+                    <AlertTriangle className="w-6 h-6 text-amber-600 shrink-0" />
+                    <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                      {job.alertMessage}
+                    </p>
+                  </div>
+                )}
 
-            {loading ? (
-              <p className="text-center text-muted-foreground py-20">{t('jobs.loading')}</p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 xl:gap-8">
-                {jobs.map((job, i) => (
-                  <motion.div
-                    key={job.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.03 }}
-                  >
-                    <ThreeDCard>
-                     <Link href={`/jobs/${generateSlug(job.id, job.title)}`}>
-                        <Card className="h-full hover:shadow-2xl transition-all duration-500 border-border/50 group bg-card/80 backdrop-blur-sm rounded-[2rem] overflow-hidden">
-                          <CardHeader className="pb-4">
-                            <div className="flex justify-between items-start mb-4">
-                              <Badge
-                                variant="secondary"
-                                className="rounded-lg px-3 py-1 font-black text-[10px] uppercase tracking-widest bg-primary/10 text-primary border-none"
-                              >
-                                {job.subCategory}
-                              </Badge>
-                              <Badge
-                                variant="outline"
-                                className="rounded-lg px-3 py-1 font-bold text-[10px] uppercase tracking-widest border-secondary/20 text-secondary"
-                              >
-                                {job.mainCategory}
-                              </Badge>
-                            </div>
-                            <CardTitle className="text-xl font-black group-hover:text-primary transition-colors leading-tight line-clamp-2">
-                              {job.title}
-                            </CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-4">
-                            <p className="text-sm font-bold text-muted-foreground line-clamp-2">{job.summary}</p>
-                            <p className="text-sm font-bold text-muted-foreground line-clamp-1">{job.organization}</p>
-                            <div className="flex flex-col gap-2">
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
-                                <MapPin className="w-4 h-4 text-primary" />
-                                {job.localArea || job.countryCode}
-                              </div>
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
-                                <Calendar className="w-4 h-4 text-secondary" />
-                                {t('jobs.until')} {new Date(job.endAt).toLocaleString()}
-                              </div>
-                            </div>
-                            <div className="pt-4 flex items-center justify-between">
-                              <span className="text-xs font-black text-primary uppercase tracking-widest flex items-center gap-1">
-                                {t('jobs.viewDetails')}{' '}
-                                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                              </span>
-                              <span className="text-xs text-muted-foreground">♥ {job.likeCount}</span>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </Link>
-                    </ThreeDCard>
-                  </motion.div>
-                ))}
-              </div>
-            )}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+                  <div className="lg:col-span-2 space-y-10">
+                    {job.description && (
+                      <section>
+                        <h2 className="text-2xl font-black mb-4 tracking-tight">Details</h2>
+                        <p className="text-muted-foreground leading-relaxed text-lg whitespace-pre-wrap">
+                          {job.description}
+                        </p>
+                      </section>
+                    )}
+                    <section>
+                      <h2 className="text-2xl font-black mb-4 tracking-tight flex items-center gap-2">
+                        <MessageCircle className="w-6 h-6" /> Comments
+                      </h2>
+                      {isLoggedIn ? (
+                        <form onSubmit={sendComment} className="flex gap-2 mb-6">
+                          <Input
+                            value={commentText}
+                            onChange={(e) => setCommentText(e.target.value)}
+                            placeholder="Write a comment…"
+                            className="rounded-xl"
+                          />
+                          <Button type="submit" className="rounded-xl">
+                            Post
+                          </Button>
+                        </form>
+                      ) : (
+                        <p className="text-sm text-muted-foreground mb-4">
+                          <Button
+                            variant="link"
+                            className="p-0 h-auto"
+                            onClick={() => router.push('/login')}
+                          >
+                            Sign in
+                          </Button>{' '}
+                          to comment.
+                        </p>
+                      )}
+                      <CommentThread
+                        targetType="job"
+                        targetId={job.id}
+                        nodes={comments}
+                        isLoggedIn={!!isLoggedIn}
+                        onLogin={() => router.push('/login')}
+                        onRefresh={refreshComments}
+                      />
+                    </section>
+                  </div>
 
-            {!loading && jobs.length === 0 && (
-              <div className="text-center py-20">
-                <p className="text-xl text-muted-foreground font-bold">{t('jobs.noResults')}</p>
-                <p className="text-sm text-muted-foreground mt-2">API total: {total}</p>
-              </div>
-            )}
-          </div>
+                  <div className="lg:col-span-1 space-y-8">
+                    <div className="space-y-4">
+                      {job.applyUrl ? (
+                        <a
+                          href={job.applyUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={cn(
+                            buttonVariants({ variant: 'default', size: 'lg' }),
+                            'w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-primary/20'
+                          )}
+                        >
+                          Apply now
+                        </a>
+                      ) : (
+                        <p className="text-sm text-muted-foreground text-center">
+                          Apply link not provided.
+                        </p>
+                      )}
+                      {job.phone && (
+                        <p className="text-center text-sm font-bold">
+                          Phone: <a href={`tel:${job.phone}`}>{job.phone}</a>
+                        </p>
+                      )}
+
+                      {(job.attachments?.length || job.pdfUrl) && (
+                        <Button
+                          variant="outline"
+                          size="lg"
+                          className="w-full h-14 rounded-2xl font-black text-lg border-2 gap-2"
+                          onClick={handleDownload}
+                          disabled={downloading}
+                        >
+                          <Download className="w-5 h-5" />
+                          {downloading ? 'Preparing...' : getDownloadButtonText()}
+                        </Button>
+                      )}
+
+                      <div className="flex gap-2">
+                        <Button variant="secondary" className="flex-1 rounded-xl gap-2" onClick={toggleLike}>
+                          <Heart className={`w-5 h-5 ${job.liked ? 'fill-current' : ''}`} />
+                          {job.likeCount}
+                        </Button>
+                        <Button variant="secondary" className="flex-1 rounded-xl gap-2" onClick={toggleFav}>
+                          <Star className={`w-5 h-5 ${job.favorited ? 'fill-current' : ''}`} />
+                          Save
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="p-8 rounded-3xl border border-border/50 bg-card">
+                      <h3 className="font-black mb-6 uppercase tracking-widest text-xs text-muted-foreground">
+                        Share
+                      </h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Button
+                          variant="outline"
+                          className="rounded-xl h-12"
+                          onClick={() => handleShare('facebook')}
+                        >
+                          <Facebook className="w-5 h-5" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="rounded-xl h-12"
+                          onClick={() => handleShare('whatsapp')}
+                        >
+                          <FontAwesomeIcon className="w-5 h-5" icon={faWhatsapp} />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="rounded-xl h-12"
+                          onClick={() => handleShare('linkedin')}
+                        >
+                          <Linkedin className="w-5 h-5" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="rounded-xl h-12"
+                          onClick={() => handleShare('copy')}
+                        >
+                          <LinkIcon className="w-5 h-5" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 
-export default GovtJobs;
+export default JobDetails;
