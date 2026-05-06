@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Head from 'next/head';
 import { motion } from 'motion/react';
 import JSZip from 'jszip';
 import {
@@ -40,7 +41,31 @@ import { CommentThread } from '../components/CommentThread';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faWhatsapp } from '@fortawesome/free-brands-svg-icons';
 
-// Helper functions for download
+// Helper: slugify a string (for URLs)
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-');
+}
+
+// Helper: extract ID from a slug like "123-job-title"
+function getIdFromSlug(slug: string): number | null {
+  const parts = slug.split('-');
+  const first = parts[0];
+  if (/^\d+$/.test(first)) {
+    return parseInt(first, 10);
+  }
+  return null;
+}
+
+// Helper: create full slug from ID and title (ID can be number or string)
+function makeSlug(id: number | string, title: string): string {
+  return `${id}-${slugify(title)}`;
+}
+
+// Download helpers (unchanged)
 function getFileExtension(url: string, mimeType?: string): string {
   const lastDot = url.lastIndexOf('.');
   if (lastDot !== -1 && lastDot < url.length - 1) {
@@ -92,8 +117,7 @@ async function downloadAsZip(files: { url: string; name: string }[], zipName: st
 
 const JobDetails = () => {
   const params = useParams();
-  const slug = params?.slug as string;
-  const id = slug?.split('-')[0]; // string id from URL
+  const rawSlug = params?.slug as string;
   const router = useRouter();
   const { isLoggedIn } = useAuth();
 
@@ -104,21 +128,53 @@ const JobDetails = () => {
   const [commentText, setCommentText] = useState('');
   const [downloading, setDownloading] = useState(false);
 
+  // Extract ID from slug and fetch job data
   useEffect(() => {
-    if (!id) return;
-    setLoading(true);
-    getJob(id).then((r) => {
+    if (!rawSlug) return;
+
+    const jobId = getIdFromSlug(rawSlug);
+    if (!jobId) {
+      setError('Invalid job link');
       setLoading(false);
-      if (!r.ok) {
-        setError(r.error);
-        return;
-      }
-      setJob(r.job);
-    });
-    listComments('job', id).then((c) => {
-      if (c.ok) setComments(c.comments);
-    });
-  }, [id]);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    // Convert number ID to string because getJob expects string
+    getJob(jobId.toString())
+      .then(async (r) => {
+        if (!r.ok) {
+          setError(r.error);
+          setLoading(false);
+          return;
+        }
+
+        const jobData = r.job;
+        setJob(jobData);
+
+        // Build the correct slug from the fetched job
+        const correctSlug = makeSlug(jobData.id, jobData.title);
+        const currentPath = window.location.pathname;
+
+        // If the URL slug doesn't match the canonical one, rewrite silently (no reload)
+        if (currentPath !== `/jobs/${correctSlug}`) {
+          window.history.replaceState(null, '', `/jobs/${correctSlug}`);
+        }
+
+        // Load comments
+        const commentsRes = await listComments('job', jobData.id.toString());
+        if (commentsRes.ok) {
+          setComments(commentsRes.comments);
+        }
+      })
+      .catch((err) => {
+        console.error(err);
+        setError('Failed to load job');
+      })
+      .finally(() => setLoading(false));
+  }, [rawSlug]);
 
   const handleShare = (platform: string) => {
     if (!job) return;
@@ -170,7 +226,7 @@ const JobDetails = () => {
     const r = await postComment('job', job.id, commentText.trim());
     if (r.ok) {
       setCommentText('');
-      listComments('job', job.id).then((c) => {
+      listComments('job', job.id.toString()).then((c) => {
         if (c.ok) setComments(c.comments);
       });
     } else {
@@ -180,7 +236,7 @@ const JobDetails = () => {
 
   const refreshComments = () => {
     if (!job) return;
-    listComments('job', job.id).then((c) => {
+    listComments('job', job.id.toString()).then((c) => {
       if (c.ok) setComments(c.comments);
     });
   };
@@ -237,121 +293,302 @@ const JobDetails = () => {
     return `Download all (${count} files)`;
   };
 
+  // Prepare meta tags for SEO
+  const pageTitle = job ? `${job.title} - ${job.organization} | ChakriHub` : 'Job Details | ChakriHub';
+  const pageDescription = job?.summary || job?.description?.slice(0, 160) || 'Find your next job opportunity on ChakriHub.';
+  const pageUrl = typeof window !== 'undefined' ? window.location.href : '';
+  // Fallback image – you can replace with a real default or job-specific image if available
+  const imageUrl = '/default-og-image.png';
+
   if (loading) {
-    return <div className="pt-32 pb-20 min-h-screen container mx-auto px-4 text-center text-muted-foreground">Loading…</div>;
+    return (
+      <>
+        <Head>
+          <title>Loading... | ChakriHub</title>
+        </Head>
+        <div className="pt-32 pb-20 min-h-screen container mx-auto px-4 text-center text-muted-foreground">
+          Loading…
+        </div>
+      </>
+    );
   }
 
   if (error || !job) {
     return (
-      <div className="pt-32 pb-20 min-h-screen container mx-auto px-4">
-        <p className="text-center text-destructive">{error || 'Not found'}</p>
-        <Button variant="ghost" className="mt-8" onClick={() => router.push('/jobs')}>Back to jobs</Button>
-      </div>
+      <>
+        <Head>
+          <title>Job Not Found | ChakriHub</title>
+        </Head>
+        <div className="pt-32 pb-20 min-h-screen container mx-auto px-4">
+          <p className="text-center text-destructive">{error || 'Job not found'}</p>
+          <Button variant="ghost" className="mt-8" onClick={() => router.push('/jobs')}>
+            Back to jobs
+          </Button>
+        </div>
+      </>
     );
   }
 
   return (
-    <div className="pt-32 pb-20 min-h-screen bg-muted/30">
-      <div className="container mx-auto px-4 max-w-4xl">
-        <Button variant="ghost" className="mb-8 font-bold hover:bg-primary/10 hover:text-primary transition-all rounded-xl" onClick={() => router.push('/jobs')}>
-          <ArrowLeft className="mr-2 w-5 h-5" /> Back to Jobs
-        </Button>
+    <>
+      <Head>
+        <title>{pageTitle}</title>
+        <meta name="description" content={pageDescription} />
+        <meta name="robots" content="index, follow" />
+        <link rel="canonical" href={pageUrl} />
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-          <Card className="rounded-[2.5rem] overflow-hidden border-border/50 shadow-2xl shadow-primary/5 bg-card">
-            <div className="bg-primary p-8 md:p-12 text-white relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-12 opacity-10"><Building2 className="w-48 h-48" /></div>
-              <div className="relative z-10">
-                <div className="flex flex-wrap gap-3 mb-6">
-                  <Badge className="bg-white/20 hover:bg-white/30 text-white border-none rounded-lg px-4 py-1 font-black uppercase tracking-widest">{job.subCategory}</Badge>
-                  <Badge className="bg-secondary text-white border-none rounded-lg px-4 py-1 font-black uppercase tracking-widest">{job.mainCategory}</Badge>
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="article" />
+        <meta property="og:title" content={pageTitle} />
+        <meta property="og:description" content={pageDescription} />
+        <meta property="og:url" content={pageUrl} />
+        <meta property="og:image" content={imageUrl} />
+        <meta property="og:site_name" content="ChakriHub" />
+
+        {/* Twitter */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={pageTitle} />
+        <meta name="twitter:description" content={pageDescription} />
+        <meta name="twitter:image" content={imageUrl} />
+
+        {/* JSON-LD structured data */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "JobPosting",
+              title: job.title,
+              description: job.description,
+              datePosted: job.startAt,
+              validThrough: job.endAt,
+              hiringOrganization: {
+                "@type": "Organization",
+                name: job.organization,
+              },
+              jobLocation: {
+                "@type": "Place",
+                address: {
+                  "@type": "PostalAddress",
+                  addressLocality: job.localArea,
+                  addressCountry: job.countryCode,
+                },
+              },
+              employmentType: job.mainCategory,
+              identifier: {
+                "@type": "PropertyValue",
+                value: job.id.toString(),
+              },
+            }),
+          }}
+        />
+      </Head>
+
+      <div className="pt-32 pb-20 min-h-screen bg-muted/30">
+        <div className="container mx-auto px-4 max-w-4xl">
+          <Button
+            variant="ghost"
+            className="mb-8 font-bold hover:bg-primary/10 hover:text-primary transition-all rounded-xl"
+            onClick={() => router.push('/jobs')}
+          >
+            <ArrowLeft className="mr-2 w-5 h-5" /> Back to Jobs
+          </Button>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <Card className="rounded-[2.5rem] overflow-hidden border-border/50 shadow-2xl shadow-primary/5 bg-card">
+              <div className="bg-primary p-8 md:p-12 text-white relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-12 opacity-10">
+                  <Building2 className="w-48 h-48" />
                 </div>
-                <h1 className="text-3xl md:text-5xl font-black mb-4 tracking-tight leading-tight">{job.title}</h1>
-                <p className="text-xl text-primary-foreground/90 font-bold mb-4 flex items-center gap-2"><Building2 className="w-6 h-6" />{job.organization}</p>
-                <p className="text-primary-foreground/90 mb-6 font-medium">{job.summary}</p>
-                <div className="flex flex-wrap gap-6 text-sm font-bold">
-                  <div className="flex items-center gap-2"><MapPin className="w-5 h-5" />{job.localArea || job.countryCode}</div>
-                  <div className="flex items-center gap-2"><Calendar className="w-5 h-5" />Apply window: {new Date(job.startAt).toLocaleString()} — {new Date(job.endAt).toLocaleString()}</div>
+                <div className="relative z-10">
+                  <div className="flex flex-wrap gap-3 mb-6">
+                    <Badge className="bg-white/20 hover:bg-white/30 text-white border-none rounded-lg px-4 py-1 font-black uppercase tracking-widest">
+                      {job.subCategory}
+                    </Badge>
+                    <Badge className="bg-secondary text-white border-none rounded-lg px-4 py-1 font-black uppercase tracking-widest">
+                      {job.mainCategory}
+                    </Badge>
+                  </div>
+                  <h1 className="text-3xl md:text-5xl font-black mb-4 tracking-tight leading-tight">
+                    {job.title}
+                  </h1>
+                  <p className="text-xl text-primary-foreground/90 font-bold mb-4 flex items-center gap-2">
+                    <Building2 className="w-6 h-6" />
+                    {job.organization}
+                  </p>
+                  <p className="text-primary-foreground/90 mb-6 font-medium">
+                    {job.summary}
+                  </p>
+                  <div className="flex flex-wrap gap-6 text-sm font-bold">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-5 h-5" />
+                      {job.localArea || job.countryCode}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-5 h-5" />
+                      Apply window: {new Date(job.startAt).toLocaleString()} —{' '}
+                      {new Date(job.endAt).toLocaleString()}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <CardContent className="p-8 md:p-12">
-              {job.alertEnabled && job.alertMessage && (
-                <div className="mb-8 p-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 flex gap-3">
-                  <AlertTriangle className="w-6 h-6 text-amber-600 shrink-0" />
-                  <p className="text-sm font-medium text-amber-900 dark:text-amber-100">{job.alertMessage}</p>
-                </div>
-              )}
+              <CardContent className="p-8 md:p-12">
+                {job.alertEnabled && job.alertMessage && (
+                  <div className="mb-8 p-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 flex gap-3">
+                    <AlertTriangle className="w-6 h-6 text-amber-600 shrink-0" />
+                    <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                      {job.alertMessage}
+                    </p>
+                  </div>
+                )}
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-                <div className="lg:col-span-2 space-y-10">
-                  {job.description && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+                  <div className="lg:col-span-2 space-y-10">
+                    {job.description && (
+                      <section>
+                        <h2 className="text-2xl font-black mb-4 tracking-tight">Details</h2>
+                        <p className="text-muted-foreground leading-relaxed text-lg whitespace-pre-wrap">
+                          {job.description}
+                        </p>
+                      </section>
+                    )}
                     <section>
-                      <h2 className="text-2xl font-black mb-4 tracking-tight">Details</h2>
-                      <p className="text-muted-foreground leading-relaxed text-lg whitespace-pre-wrap">{job.description}</p>
+                      <h2 className="text-2xl font-black mb-4 tracking-tight flex items-center gap-2">
+                        <MessageCircle className="w-6 h-6" /> Comments
+                      </h2>
+                      {isLoggedIn ? (
+                        <form onSubmit={sendComment} className="flex gap-2 mb-6">
+                          <Input
+                            value={commentText}
+                            onChange={(e) => setCommentText(e.target.value)}
+                            placeholder="Write a comment…"
+                            className="rounded-xl"
+                          />
+                          <Button type="submit" className="rounded-xl">
+                            Post
+                          </Button>
+                        </form>
+                      ) : (
+                        <p className="text-sm text-muted-foreground mb-4">
+                          <Button
+                            variant="link"
+                            className="p-0 h-auto"
+                            onClick={() => router.push('/login')}
+                          >
+                            Sign in
+                          </Button>{' '}
+                          to comment.
+                        </p>
+                      )}
+                      <CommentThread
+                        targetType="job"
+                        targetId={job.id}
+                        nodes={comments}
+                        isLoggedIn={!!isLoggedIn}
+                        onLogin={() => router.push('/login')}
+                        onRefresh={refreshComments}
+                      />
                     </section>
-                  )}
-                  <section>
-                    <h2 className="text-2xl font-black mb-4 tracking-tight flex items-center gap-2"><MessageCircle className="w-6 h-6" /> Comments</h2>
-                    {isLoggedIn ? (
-                      <form onSubmit={sendComment} className="flex gap-2 mb-6">
-                        <Input value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="Write a comment…" className="rounded-xl" />
-                        <Button type="submit" className="rounded-xl">Post</Button>
-                      </form>
-                    ) : (
-                      <p className="text-sm text-muted-foreground mb-4">
-                        <Button variant="link" className="p-0 h-auto" onClick={() => router.push('/login')}>Sign in</Button> to comment.
-                      </p>
-                    )}
-                    <CommentThread targetType="job" targetId={job.id} nodes={comments} isLoggedIn={!!isLoggedIn} onLogin={() => router.push('/login')} onRefresh={refreshComments} />
-                  </section>
-                </div>
-
-                <div className="lg:col-span-1 space-y-8">
-                  <div className="space-y-4">
-                    {job.applyUrl ? (
-                      <a href={job.applyUrl} target="_blank" rel="noopener noreferrer" className={cn(buttonVariants({ variant: 'default', size: 'lg' }), 'w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-primary/20')}>Apply now</a>
-                    ) : (
-                      <p className="text-sm text-muted-foreground text-center">Apply link not provided.</p>
-                    )}
-                    {job.phone && <p className="text-center text-sm font-bold">Phone: <a href={`tel:${job.phone}`}>{job.phone}</a></p>}
-
-                    {(job.attachments?.length || job.pdfUrl) && (
-                      <Button variant="outline" size="lg" className="w-full h-14 rounded-2xl font-black text-lg border-2 gap-2" onClick={handleDownload} disabled={downloading}>
-                        <Download className="w-5 h-5" />
-                        {downloading ? 'Preparing...' : getDownloadButtonText()}
-                      </Button>
-                    )}
-
-                    <div className="flex gap-2">
-                      <Button variant="secondary" className="flex-1 rounded-xl gap-2" onClick={toggleLike}>
-                        <Heart className={`w-5 h-5 ${job.liked ? 'fill-current' : ''}`} />
-                        {job.likeCount}
-                      </Button>
-                      <Button variant="secondary" className="flex-1 rounded-xl gap-2" onClick={toggleFav}>
-                        <Star className={`w-5 h-5 ${job.favorited ? 'fill-current' : ''}`} />
-                        Save
-                      </Button>
-                    </div>
                   </div>
 
-                  <div className="p-8 rounded-3xl border border-border/50 bg-card">
-                    <h3 className="font-black mb-6 uppercase tracking-widest text-xs text-muted-foreground">Share</h3>
-                    <div className="grid grid-cols-2 gap-3">
-                      <Button variant="outline" className="rounded-xl h-12" onClick={() => handleShare('facebook')}><Facebook className="w-5 h-5" /></Button>
-                      <Button variant="outline" className="rounded-xl h-12" onClick={() => handleShare('whatsapp')}><FontAwesomeIcon className="w-5 h-5" icon={faWhatsapp} /></Button>
-                      <Button variant="outline" className="rounded-xl h-12" onClick={() => handleShare('linkedin')}><Linkedin className="w-5 h-5" /></Button>
-                      <Button variant="outline" className="rounded-xl h-12" onClick={() => handleShare('copy')}><LinkIcon className="w-5 h-5" /></Button>
+                  <div className="lg:col-span-1 space-y-8">
+                    <div className="space-y-4">
+                      {job.applyUrl ? (
+                        <a
+                          href={job.applyUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={cn(
+                            buttonVariants({ variant: 'default', size: 'lg' }),
+                            'w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-primary/20'
+                          )}
+                        >
+                          Apply now
+                        </a>
+                      ) : (
+                        <p className="text-sm text-muted-foreground text-center">
+                          Apply link not provided.
+                        </p>
+                      )}
+                      {job.phone && (
+                        <p className="text-center text-sm font-bold">
+                          Phone: <a href={`tel:${job.phone}`}>{job.phone}</a>
+                        </p>
+                      )}
+
+                      {(job.attachments?.length || job.pdfUrl) && (
+                        <Button
+                          variant="outline"
+                          size="lg"
+                          className="w-full h-14 rounded-2xl font-black text-lg border-2 gap-2"
+                          onClick={handleDownload}
+                          disabled={downloading}
+                        >
+                          <Download className="w-5 h-5" />
+                          {downloading ? 'Preparing...' : getDownloadButtonText()}
+                        </Button>
+                      )}
+
+                      <div className="flex gap-2">
+                        <Button variant="secondary" className="flex-1 rounded-xl gap-2" onClick={toggleLike}>
+                          <Heart className={`w-5 h-5 ${job.liked ? 'fill-current' : ''}`} />
+                          {job.likeCount}
+                        </Button>
+                        <Button variant="secondary" className="flex-1 rounded-xl gap-2" onClick={toggleFav}>
+                          <Star className={`w-5 h-5 ${job.favorited ? 'fill-current' : ''}`} />
+                          Save
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="p-8 rounded-3xl border border-border/50 bg-card">
+                      <h3 className="font-black mb-6 uppercase tracking-widest text-xs text-muted-foreground">
+                        Share
+                      </h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Button
+                          variant="outline"
+                          className="rounded-xl h-12"
+                          onClick={() => handleShare('facebook')}
+                        >
+                          <Facebook className="w-5 h-5" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="rounded-xl h-12"
+                          onClick={() => handleShare('whatsapp')}
+                        >
+                          <FontAwesomeIcon className="w-5 h-5" icon={faWhatsapp} />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="rounded-xl h-12"
+                          onClick={() => handleShare('linkedin')}
+                        >
+                          <Linkedin className="w-5 h-5" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="rounded-xl h-12"
+                          onClick={() => handleShare('copy')}
+                        >
+                          <LinkIcon className="w-5 h-5" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 
