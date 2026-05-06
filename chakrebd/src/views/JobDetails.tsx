@@ -40,12 +40,14 @@ import { CommentThread } from '../components/CommentThread';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faWhatsapp } from '@fortawesome/free-brands-svg-icons';
 
-// Helper: extract numeric ID from slug like "123-job-title"
-function getIdFromSlug(slug: string): number | null {
-  const match = slug.match(/^(\d+)/);
-  if (match) return parseInt(match[1], 10);
-  // Fallback: if slug is purely numeric, use that
-  if (/^\d+$/.test(slug)) return parseInt(slug, 10);
+// ========== Helper: extract MongoDB ObjectId from slug ==========
+// Slug format: "69f933e1f1cb2c33057a72dd-job-title"
+function getIdFromSlug(slug: string): string | null {
+  // Match exactly 24 hex characters at the beginning
+  const match = slug.match(/^([a-f0-9]{24})/);
+  if (match) return match[1];
+  // Fallback if slug is only the ID (no dash)
+  if (/^[a-f0-9]{24}$/.test(slug)) return slug;
   return null;
 }
 
@@ -60,7 +62,7 @@ function slugifyTitle(title: string): string {
     .substring(0, 80); // prevent overly long slugs
 }
 
-// Helper functions for download
+// ========== Download helpers ==========
 function getFileExtension(url: string, mimeType?: string): string {
   const lastDot = url.lastIndexOf('.');
   if (lastDot !== -1 && lastDot < url.length - 1) {
@@ -110,12 +112,12 @@ async function downloadAsZip(files: { url: string; name: string }[], zipName: st
   window.URL.revokeObjectURL(zipUrl);
 }
 
+// ========== Main Component ==========
 const JobDetails = () => {
   const params = useParams();
   const router = useRouter();
   const { isLoggedIn } = useAuth();
 
-  // The raw slug from URL (e.g., "123-job-title")
   const rawSlug = params?.slug as string;
 
   const [job, setJob] = useState<(ApiJobDetail & { attachments?: any[] }) | null>(null);
@@ -128,7 +130,6 @@ const JobDetails = () => {
   useEffect(() => {
     if (!rawSlug) return;
 
-    // Extract numeric ID from the slug
     const jobId = getIdFromSlug(rawSlug);
     if (!jobId) {
       setError('Invalid job link');
@@ -141,8 +142,8 @@ const JobDetails = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // Fetch job details
-        const jobRes = await getJob(jobId.toString());
+        // Fetch job details using the ObjectId string
+        const jobRes = await getJob(jobId);
         if (!jobRes.ok) {
           if (isMounted) setError(jobRes.error || 'Job not found');
           return;
@@ -159,7 +160,7 @@ const JobDetails = () => {
         }
 
         // Fetch comments
-        const commentsRes = await listComments('job', jobData.id.toString());
+        const commentsRes = await listComments('job', jobData.id);
         if (commentsRes.ok && isMounted) {
           setComments(commentsRes.comments);
         }
@@ -176,11 +177,9 @@ const JobDetails = () => {
     return () => {
       isMounted = false;
     };
-  }, [rawSlug]); // Re-run if slug changes
+  }, [rawSlug]);
 
-  // Handlers (like, fav, comment, share, download) remain mostly unchanged
-  // but ensure they use job.id (numeric) for API calls.
-
+  // Share handler
   const handleShare = (platform: string) => {
     if (!job) return;
     const url = typeof window !== 'undefined' ? window.location.href : '';
@@ -197,6 +196,7 @@ const JobDetails = () => {
     }
   };
 
+  // Like / Unlike
   const toggleLike = async () => {
     if (!job || !isLoggedIn) {
       router.push('/login');
@@ -211,6 +211,7 @@ const JobDetails = () => {
     }
   };
 
+  // Favorite / Unfavorite
   const toggleFav = async () => {
     if (!job || !isLoggedIn) {
       router.push('/login');
@@ -225,6 +226,7 @@ const JobDetails = () => {
     }
   };
 
+  // Post a comment
   const sendComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!job || !commentText.trim() || !isLoggedIn) return;
@@ -238,12 +240,14 @@ const JobDetails = () => {
     }
   };
 
+  // Refresh comments
   const refreshComments = async () => {
     if (!job) return;
     const c = await listComments('job', job.id);
     if (c.ok) setComments(c.comments);
   };
 
+  // Download attachments
   const handleDownload = async () => {
     if (!job) return;
     const files: { url: string; name: string }[] = [];
@@ -296,6 +300,7 @@ const JobDetails = () => {
     return `Download all (${count} files)`;
   };
 
+  // Loading state
   if (loading) {
     return (
       <div className="pt-32 pb-20 min-h-screen container mx-auto px-4 text-center text-muted-foreground">
@@ -304,6 +309,7 @@ const JobDetails = () => {
     );
   }
 
+  // Error or not found
   if (error || !job) {
     return (
       <div className="pt-32 pb-20 min-h-screen container mx-auto px-4">
@@ -315,6 +321,7 @@ const JobDetails = () => {
     );
   }
 
+  // Main render
   return (
     <div className="pt-32 pb-20 min-h-screen bg-muted/30">
       <div className="container mx-auto px-4 max-w-4xl">
